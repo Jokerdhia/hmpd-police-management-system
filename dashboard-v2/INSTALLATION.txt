@@ -1,0 +1,37 @@
+INSTALLATION HMPD DASHBOARD PRO
+
+1. Arrête l'ancien Dashboard avec Ctrl + C.
+
+2. Sauvegarde l'ancien dossier :
+   cd E:\hmpd-points-bot
+   Rename-Item dashboard-v2 dashboard-v2-backup
+
+3. Décompresse ce ZIP.
+
+4. Copie le dossier hmpd-dashboard-pro dans :
+   E:\hmpd-points-bot
+
+5. Renomme-le en :
+   dashboard-v2
+
+6. Installe les dépendances :
+   npm install express express-session helmet express-rate-limit
+
+7. Vérifie les variables dans .env avec ENV-A-AJOUTER.txt.
+
+8. Lance :
+   node dashboard-v2\server.js
+
+9. Ouvre :
+   http://localhost:3001
+
+Le projet ajoute :
+- Graphiques
+- Journal d'activité
+- Dossiers policiers
+- Notes
+- Sanctions
+- Historique
+- Ajout/retrait de points
+- OAuth Discord facultatif
+- Contrôle du rôle High Command

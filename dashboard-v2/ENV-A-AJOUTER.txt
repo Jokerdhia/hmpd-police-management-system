@@ -1,0 +1,15 @@
+Ajoute ces lignes dans E:\hmpd-points-bot\.env
+
+DASHBOARD_PORT_V2=3001
+DASHBOARD_MODERATOR_ID=TON_ID_DISCORD
+SESSION_SECRET=REMPLACE_PAR_UNE_LONGUE_CLE_ALEATOIRE
+
+Pour activer la connexion Discord OAuth :
+CLIENT_SECRET=SECRET_DE_TON_APPLICATION_DISCORD
+DISCORD_CALLBACK_URL=http://localhost:3001/auth/discord/callback
+
+Dans le portail Discord Developer :
+OAuth2 > Redirects > ajoute exactement :
+http://localhost:3001/auth/discord/callback
+
+Sans CLIENT_SECRET, le Dashboard reste en mode local.

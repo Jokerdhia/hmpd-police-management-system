@@ -1,0 +1,36 @@
+HMPD DASHBOARD V3 — INSTALLATION
+
+1. Arrête le Dashboard avec Ctrl + C.
+
+2. Dans PowerShell :
+   cd E:\hmpd-points-bot
+
+3. Sauvegarde l'ancienne version :
+   Rename-Item dashboard-v2 dashboard-v2-ancienne
+
+4. Décompresse le ZIP.
+
+5. Copie le dossier hmpd-dashboard-v3 dans :
+   E:\hmpd-points-bot
+
+6. Renomme-le :
+   dashboard-v2
+
+7. Installe les dépendances :
+   npm install express express-session helmet express-rate-limit
+
+8. Lance :
+   node dashboard-v2\server.js
+
+9. Ouvre :
+   http://localhost:3001
+
+10. Dans le navigateur, fais Ctrl + F5.
+
+Cette version corrige :
+- avatars géants
+- cartes superposées
+- fenêtres mal centrées
+- boutons non alignés
+- conflits CSS
+- problèmes responsive

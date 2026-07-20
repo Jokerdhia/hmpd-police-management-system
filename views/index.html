@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>HMPD Dashboard V2</title>
+
+  <link
+    rel="stylesheet"
+    href="/css/style.css"
+  >
+</head>
+
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-logo">
+          HMPD
+        </div>
+
+        <div>
+          <h1>Police Dashboard</h1>
+          <p>Administration HMPD</p>
+        </div>
+      </div>
+
+      <nav class="navigation">
+        <button
+          class="nav-button active"
+          data-page="dashboard"
+        >
+          <span>📊</span>
+          Tableau de bord
+        </button>
+
+        <button
+          class="nav-button"
+          data-page="officers"
+        >
+          <span>👮</span>
+          Policiers
+        </button>
+
+        <button
+          class="nav-button"
+          data-page="leaderboard"
+        >
+          <span>🏆</span>
+          Classement
+        </button>
+      </nav>
+
+      <div class="sidebar-footer">
+        <span class="online-dot"></span>
+        Dashboard connecté
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h2 id="pageTitle">
+            Tableau de bord
+          </h2>
+
+          <p id="pageSubtitle">
+            Vue générale du département
+          </p>
+        </div>
+
+        <button
+          id="refreshButton"
+          class="button secondary"
+          type="button"
+        >
+          🔄 Actualiser
+        </button>
+      </header>
+
+      <div
+        id="notification"
+        class="notification hidden"
+      ></div>
+
+      <!-- TABLEAU DE BORD -->
+
+      <section
+        id="dashboardPage"
+        class="page active"
+      >
+        <div class="stats-grid">
+          <article class="stat-card">
+            <div class="stat-icon">👮</div>
+
+            <div>
+              <span>Policiers</span>
+              <strong id="officerCount">0</strong>
+            </div>
+          </article>
+
+          <article class="stat-card">
+            <div class="stat-icon">⭐</div>
+
+            <div>
+              <span>Total des points</span>
+              <strong id="totalPoints">0</strong>
+            </div>
+          </article>
+
+          <article class="stat-card">
+            <div class="stat-icon">📈</div>
+
+            <div>
+              <span>Moyenne</span>
+              <strong id="averagePoints">0</strong>
+            </div>
+          </article>
+
+          <article class="stat-card">
+            <div class="stat-icon">🏆</div>
+
+            <div>
+              <span>Meilleur policier</span>
+              <strong id="bestOfficer">Aucun</strong>
+            </div>
+          </article>
+        </div>
+
+        <div class="dashboard-grid">
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>Top policiers</h3>
+                <p>Classement actuel</p>
+              </div>
+            </div>
+
+            <div
+              id="dashboardLeaderboard"
+              class="ranking-list"
+            >
+              <div class="empty-state">
+                Chargement...
+              </div>
+            </div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-header">
+              <div>
+                <h3>Répartition des grades</h3>
+                <p>Effectif par grade</p>
+              </div>
+            </div>
+
+            <div
+              id="gradeStatistics"
+              class="grade-list"
+            >
+              <div class="empty-state">
+                Chargement...
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <!-- POLICIERS -->
+
+      <section
+        id="officersPage"
+        class="page"
+      >
+        <article class="panel">
+          <div class="panel-header officers-header">
+            <div>
+              <h3>Liste des policiers</h3>
+              <p>
+                Cliquez sur un policier pour ouvrir son profil
+              </p>
+            </div>
+
+            <input
+              id="officerSearch"
+              class="search-input"
+              type="search"
+              placeholder="Nom, pseudo, grade ou ID..."
+            >
+          </div>
+
+          <div class="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Position</th>
+                  <th>Policier</th>
+                  <th>Grade</th>
+                  <th>Points</th>
+                  <th>Mise à jour</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+
+              <tbody id="officersTableBody">
+                <tr>
+                  <td colspan="6">
+                    <div class="empty-state">
+                      Chargement...
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <!-- CLASSEMENT -->
+
+      <section
+        id="leaderboardPage"
+        class="page"
+      >
+        <article class="panel">
+          <div class="panel-header">
+            <div>
+              <h3>Classement HMPD</h3>
+              <p>
+                Classement par nombre de points
+              </p>
+            </div>
+          </div>
+
+          <div
+            id="fullLeaderboard"
+            class="ranking-list large"
+          >
+            <div class="empty-state">
+              Chargement...
+            </div>
+          </div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <!-- FENÊTRE PROFIL -->
+
+  <div
+    id="profileModal"
+    class="modal hidden"
+  >
+    <div
+      class="modal-overlay"
+      data-close-profile
+    ></div>
+
+    <div class="profile-modal">
+      <header class="modal-header">
+        <div>
+          <h3>Profil du policier</h3>
+          <p>Gestion complète des points</p>
+        </div>
+
+        <button
+          id="closeProfileButton"
+          class="close-button"
+          type="button"
+        >
+          ✕
+        </button>
+      </header>
+
+      <div id="profileContent">
+        <div class="empty-state">
+          Chargement...
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FORMULAIRE POINTS -->
+
+  <div
+    id="pointsModal"
+    class="modal hidden"
+  >
+    <div
+      class="modal-overlay"
+      data-close-points
+    ></div>
+
+    <div class="form-modal">
+      <header class="modal-header">
+        <div>
+          <h3 id="pointsModalTitle">
+            Modifier les points
+          </h3>
+
+          <p id="pointsOfficerName"></p>
+        </div>
+
+        <button
+          id="closePointsButton"
+          class="close-button"
+          type="button"
+        >
+          ✕
+        </button>
+      </header>
+
+      <form id="pointsForm">
+        <input
+          id="pointsAction"
+          type="hidden"
+        >
+
+        <input
+          id="pointsUserId"
+          type="hidden"
+        >
+
+        <div class="form-group">
+          <label for="pointsAmount">
+            Nombre de points
+          </label>
+
+          <input
+            id="pointsAmount"
+            type="number"
+            min="1"
+            max="1000"
+            required
+            placeholder="Exemple : 10"
+          >
+        </div>
+
+        <div class="quick-points">
+          <button type="button" data-amount="1">
+            1
+          </button>
+
+          <button type="button" data-amount="5">
+            5
+          </button>
+
+          <button type="button" data-amount="10">
+            10
+          </button>
+
+          <button type="button" data-amount="25">
+            25
+          </button>
+
+          <button type="button" data-amount="50">
+            50
+          </button>
+        </div>
+
+        <div class="form-group">
+          <label for="pointsReason">
+            Raison
+          </label>
+
+          <textarea
+            id="pointsReason"
+            minlength="3"
+            maxlength="500"
+            required
+            placeholder="Exemple : Bonne activité en patrouille"
+          ></textarea>
+        </div>
+
+        <div
+          id="pointsFormError"
+          class="form-error hidden"
+        ></div>
+
+        <div class="form-actions">
+          <button
+            id="cancelPointsButton"
+            class="button secondary"
+            type="button"
+          >
+            Annuler
+          </button>
+
+          <button
+            id="submitPointsButton"
+            class="button"
+            type="submit"
+          >
+            Confirmer
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

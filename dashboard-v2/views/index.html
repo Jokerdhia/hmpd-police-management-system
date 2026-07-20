@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HMPD MDT V3</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">HMPD</div>
+        <div class="brand-copy">
+          <strong>Police MDT</strong>
+          <span>Harmony Police Department</span>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-page="dashboard"><span>▦</span>Tableau de bord</button>
+        <button class="nav-item" data-page="officers"><span>♟</span>Policiers</button>
+        <button class="nav-item" data-page="leaderboard"><span>★</span>Classement</button>
+        <button class="nav-item" data-page="activity"><span>≡</span>Activité</button>
+      </nav>
+
+      <div class="sidebar-user" id="currentUser">
+        <div class="status-dot"></div>
+        <div>
+          <small>Session</small>
+          <strong>Chargement...</strong>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">HMPD COMMAND CENTER</p>
+          <h1 id="pageTitle">Tableau de bord</h1>
+          <p id="pageSubtitle">Vue générale du département</p>
+        </div>
+        <div class="topbar-actions">
+          <div class="clock" id="serverClock">--:--:--</div>
+          <button class="btn btn-secondary" id="refreshButton">Actualiser</button>
+        </div>
+      </header>
+
+      <div id="notification" class="toast hidden"></div>
+
+      <section id="dashboardPage" class="page active">
+        <div class="stats-grid">
+          <article class="stat-card">
+            <div class="stat-icon">👮</div>
+            <div><span>Policiers</span><strong id="officerCount">0</strong></div>
+          </article>
+          <article class="stat-card">
+            <div class="stat-icon">⭐</div>
+            <div><span>Total des points</span><strong id="totalPoints">0</strong></div>
+          </article>
+          <article class="stat-card">
+            <div class="stat-icon">📊</div>
+            <div><span>Moyenne</span><strong id="averagePoints">0</strong></div>
+          </article>
+          <article class="stat-card">
+            <div class="stat-icon">🏆</div>
+            <div><span>Meilleur policier</span><strong id="bestOfficer">Aucun</strong></div>
+          </article>
+        </div>
+
+        <div class="dashboard-grid">
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Top policiers</h2><p>Classement actuel</p></div>
+            </div>
+            <div id="dashboardLeaderboard" class="ranking-list"></div>
+          </article>
+
+          <article class="panel">
+            <div class="panel-head">
+              <div><h2>Répartition des grades</h2><p>Effectif par grade</p></div>
+            </div>
+            <div class="chart-wrap"><canvas id="gradeChart"></canvas></div>
+          </article>
+        </div>
+
+        <article class="panel panel-spaced">
+          <div class="panel-head">
+            <div><h2>Evolution des points</h2><p>Dernières opérations enregistrées</p></div>
+          </div>
+          <div class="chart-wrap chart-wide"><canvas id="activityChart"></canvas></div>
+        </article>
+      </section>
+
+      <section id="officersPage" class="page">
+        <article class="panel">
+          <div class="panel-head panel-head-responsive">
+            <div><h2>Dossiers policiers</h2><p>Profils, points, notes et sanctions</p></div>
+            <input class="search" id="officerSearch" type="search" placeholder="Rechercher nom, grade, ID...">
+          </div>
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr><th>#</th><th>Policier</th><th>Grade</th><th>Points</th><th>Mise à jour</th><th></th></tr>
+              </thead>
+              <tbody id="officersTableBody"></tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <section id="leaderboardPage" class="page">
+        <article class="panel">
+          <div class="panel-head"><div><h2>Classement HMPD</h2><p>Classement général du département</p></div></div>
+          <div id="fullLeaderboard" class="ranking-list ranking-large"></div>
+        </article>
+      </section>
+
+      <section id="activityPage" class="page">
+        <article class="panel">
+          <div class="panel-head"><div><h2>Journal d'activité</h2><p>Historique récent des modifications</p></div></div>
+          <div id="activityFeed" class="activity-feed"></div>
+        </article>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal hidden" id="profileModal">
+    <div class="modal-backdrop" data-close-profile></div>
+    <div class="modal-card modal-profile">
+      <header class="modal-head">
+        <div><p class="eyebrow">DOSSIER ADMINISTRATIF</p><h2>Profil du policier</h2></div>
+        <button class="icon-btn" id="closeProfileButton">✕</button>
+      </header>
+      <div id="profileContent"></div>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="pointsModal">
+    <div class="modal-backdrop" data-close-points></div>
+    <div class="modal-card modal-form">
+      <header class="modal-head">
+        <div><p class="eyebrow">GESTION DES POINTS</p><h2 id="pointsModalTitle">Modifier les points</h2><p id="pointsOfficerName"></p></div>
+        <button class="icon-btn" id="closePointsButton">✕</button>
+      </header>
+      <form id="pointsForm" class="form">
+        <input id="pointsAction" type="hidden">
+        <input id="pointsUserId" type="hidden">
+        <label>Nombre de points<input id="pointsAmount" type="number" min="1" max="1000" required></label>
+        <div class="quick-grid">
+          <button type="button" data-amount="1">1</button>
+          <button type="button" data-amount="5">5</button>
+          <button type="button" data-amount="10">10</button>
+          <button type="button" data-amount="25">25</button>
+          <button type="button" data-amount="50">50</button>
+        </div>
+        <label>Raison<textarea id="pointsReason" minlength="3" maxlength="500" required></textarea></label>
+        <div id="pointsFormError" class="form-error hidden"></div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" id="cancelPointsButton">Annuler</button>
+          <button type="submit" class="btn btn-primary" id="submitPointsButton">Confirmer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="recordModal">
+    <div class="modal-backdrop" data-close-record></div>
+    <div class="modal-card modal-form">
+      <header class="modal-head">
+        <div><p class="eyebrow">DOSSIER DU POLICIER</p><h2 id="recordModalTitle">Ajouter au dossier</h2><p id="recordOfficerName"></p></div>
+        <button class="icon-btn" id="closeRecordButton">✕</button>
+      </header>
+      <form id="recordForm" class="form">
+        <input id="recordType" type="hidden">
+        <input id="recordUserId" type="hidden">
+        <label id="sanctionTypeGroup" class="hidden">Type de sanction
+          <select id="sanctionType">
+            <option>Avertissement</option>
+            <option>Suspension</option>
+            <option>Rétrogradation disciplinaire</option>
+            <option>Conseil de discipline</option>
+          </select>
+        </label>
+        <label><span id="recordContentLabel">Contenu</span><textarea id="recordContent" minlength="3" maxlength="1000" required></textarea></label>
+        <label id="expiresGroup" class="hidden">Date de fin<input id="recordExpires" type="date"></label>
+        <div id="recordFormError" class="form-error hidden"></div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" id="cancelRecordButton">Annuler</button>
+          <button type="submit" class="btn btn-primary" id="submitRecordButton">Enregistrer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>

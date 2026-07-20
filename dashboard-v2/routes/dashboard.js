@@ -1,0 +1,3 @@
+const express=require('express');const {getEnrichedLeaderboard}=require('../services/officerService');const {clearMemberCache}=require('../services/discordService');const router=express.Router();
+router.get('/leaderboard',async(req,res,next)=>{try{const n=Number(req.query.limit),limit=Number.isInteger(n)?Math.min(Math.max(n,1),50):25,leaderboard=await getEnrichedLeaderboard(limit);res.json({success:true,total:leaderboard.length,leaderboard});}catch(e){next(e);}});
+router.post('/cache/clear',(req,res)=>{clearMemberCache();res.json({success:true,message:'Cache Discord supprimé.'});});module.exports=router;
