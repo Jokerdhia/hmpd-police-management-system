@@ -57,14 +57,14 @@ async function syncPoliceRoles() {
     );
 
     const existingIds = new Set(
-      getAllOfficers().map((officer) => String(officer.user_id))
+      (await getAllOfficers()).map((officer) => String(officer.user_id))
     );
 
     let addedCount = 0;
 
     for (const member of policeMembers) {
       if (!existingIds.has(member.userId)) {
-        getOfficer(member.userId);
+        await getOfficer(member.userId);
         existingIds.add(member.userId);
         addedCount += 1;
       }

@@ -248,7 +248,7 @@ async function enrichOfficers(officers) {
 */
 
 async function listOfficers() {
-  const enriched = await enrichOfficers(getAllOfficers());
+  const enriched = await enrichOfficers(await getAllOfficers());
 
   return enriched.filter(
     (officer) =>
@@ -259,14 +259,14 @@ async function listOfficers() {
 
 async function getOfficerProfile(userId) {
   const safeUserId = normalizeUserId(userId);
-  const officer = getOfficer(safeUserId);
+  const officer = await getOfficer(safeUserId);
 
   return enrichOfficer(officer);
 }
 
 async function getEnrichedLeaderboard(limit = 25) {
   const safeLimit = normalizeLimit(limit);
-  const enriched = await enrichOfficers(getAllOfficers());
+  const enriched = await enrichOfficers(await getAllOfficers());
 
   return enriched
     .filter(
@@ -278,11 +278,11 @@ async function getEnrichedLeaderboard(limit = 25) {
     .slice(0, safeLimit);
 }
 
-function getHistory(userId, limit = 25) {
+async function getHistory(userId, limit = 25) {
   const safeUserId = normalizeUserId(userId);
   const safeLimit = normalizeLimit(limit);
 
-  return getOfficerHistory(
+  return await getOfficerHistory(
     safeUserId,
     safeLimit
   );
@@ -480,7 +480,7 @@ async function modifyOfficerPoints({
     );
   }
 
-  const officerBefore = getOfficer(
+  const officerBefore = await getOfficer(
     safeUserId
   );
 
@@ -536,7 +536,7 @@ async function modifyOfficerPoints({
   let result;
 
   try {
-    result = changeOfficerPoints({
+    result = await changeOfficerPoints({
       userId: safeUserId,
       action: safeAction,
       amount: safeAmount,

@@ -522,7 +522,7 @@ async function synchronizeMemberGrade(
     );
   }
 
-  updateOfficer(
+  await updateOfficer(
     member.id,
     points,
     expectedGrade.name
@@ -621,7 +621,7 @@ async function modifyPoints({
 
   verifyMemberCanBeManaged(member);
 
-  const officerBefore = getOfficer(user.id);
+  const officerBefore = await getOfficer(user.id);
   const oldPoints = Number(officerBefore.points);
 
   let newPoints;
@@ -642,7 +642,7 @@ async function modifyPoints({
   const oldGrade = getGradeFromPoints(oldPoints);
   const newGrade = getGradeFromPoints(newPoints);
 
-  const databaseResult = changeOfficerPoints({
+  const databaseResult = await changeOfficerPoints({
     userId: user.id,
     action,
     amount: requestedAmount,
@@ -663,7 +663,7 @@ async function modifyPoints({
     | n'a pas pu être modifié.
     */
 
-    updateOfficer(
+    await updateOfficer(
       user.id,
       oldPoints,
       oldGrade.name
@@ -775,11 +775,11 @@ const client = new Client({
 client.once(Events.ClientReady, async () => {
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
-  console.log("✅ Base SQLite connectée.");
+  console.log("✅ Base Neon PostgreSQL connectée.");
   console.log("✅ Promotions automatiques actives.");
   console.log("✅ Rétrogradations automatiques actives.");
   console.log("✅ Logs automatiques actifs.");
-  console.log(`📊 Policiers enregistrés : ${countOfficers()}`);
+  console.log(`📊 Policiers enregistrés : ${await countOfficers()}`);
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
   for (const guild of client.guilds.cache.values()) {
@@ -860,7 +860,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         interaction.options.getUser("membre") ||
         interaction.user;
 
-      const officer = getOfficer(user.id);
+      const officer = await getOfficer(user.id);
       const currentGrade = getGradeFromPoints(
         Number(officer.points)
       );
@@ -933,7 +933,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const limit =
         interaction.options.getInteger("limite") || 10;
 
-      const ranking = getLeaderboard(limit);
+      const ranking = await getLeaderboard(limit);
 
       if (ranking.length === 0) {
         await interaction.reply(
@@ -965,7 +965,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         .setTitle("🏆 CLASSEMENT HMPD")
         .setDescription(lines.join("\n\n"))
         .setFooter({
-          text: `${countOfficers()} policier(s) enregistré(s)`,
+          text: `${await countOfficers()} policier(s) enregistré(s)`,
         })
         .setTimestamp();
 
@@ -1004,7 +1004,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const limit =
         interaction.options.getInteger("limite") || 10;
 
-      const history = getOfficerHistory(
+      const history = await getOfficerHistory(
         user.id,
         limit
       );
@@ -1103,7 +1103,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       verifyMemberCanBeManaged(member);
 
-      const officer = getOfficer(user.id);
+      const officer = await getOfficer(user.id);
 
       const result = await synchronizeMemberGrade(
         member,
@@ -1188,15 +1188,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
 |--------------------------------------------------------------------------
 */
 
-function shutdownBot(signal) {
+async function shutdownBot(signal) {
   console.log(`\n🛑 Arrêt reçu : ${signal}`);
 
   try {
-    closeDatabase();
-    console.log("✅ Base SQLite fermée.");
+    await closeDatabase();
+    console.log("✅ Base Neon PostgreSQL fermée.");
   } catch (error) {
     console.error(
-      "❌ Erreur pendant la fermeture SQLite :",
+      "❌ Erreur pendant la fermeture PostgreSQL :",
       error
     );
   }
@@ -1206,11 +1206,11 @@ function shutdownBot(signal) {
 }
 
 process.on("SIGINT", () => {
-  shutdownBot("SIGINT");
+  void shutdownBot("SIGINT");
 });
 
 process.on("SIGTERM", () => {
-  shutdownBot("SIGTERM");
+  void shutdownBot("SIGTERM");
 });
 
 process.on("unhandledRejection", (error) => {
@@ -1232,6 +1232,5 @@ client.login(TOKEN).catch((error) => {
   console.error("Vérifie le TOKEN dans le fichier .env.");
   console.error(error);
 
-  closeDatabase();
-  process.exit(1);
+  closeDatabase().finally(() => process.exit(1));
 });

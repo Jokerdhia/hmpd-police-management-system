@@ -58,11 +58,11 @@ router.get("/", async (request, response, next) => {
  * Cette route doit rester avant /:userId afin que "history"
  * ne soit jamais interprété comme un identifiant utilisateur.
  */
-router.get("/:userId/history", (request, response, next) => {
+router.get("/:userId/history", async (request, response, next) => {
   try {
     const userId = normalizeDiscordId(request.params.userId);
     const limit = normalizeLimit(request.query.limit);
-    const history = getHistory(userId, limit);
+    const history = await getHistory(userId, limit);
 
     return response.status(200).json({
       success: true,

@@ -71,10 +71,10 @@ function normalizeExpiration(value) {
   return date.toISOString();
 }
 
-router.get("/activity", (request, response, next) => {
+router.get("/activity", async (request, response, next) => {
   try {
     const limit = normalizeLimit(request.query.limit);
-    const activity = listActivity(limit);
+    const activity = await listActivity(limit);
 
     return response.status(200).json({
       success: true,
@@ -86,14 +86,14 @@ router.get("/activity", (request, response, next) => {
   }
 });
 
-router.get("/officers/:userId/notes", (request, response, next) => {
+router.get("/officers/:userId/notes", async (request, response, next) => {
   try {
     const userId = normalizeDiscordId(
       request.params.userId,
       "Identifiant du policier"
     );
 
-    const notes = listNotes(userId);
+    const notes = await listNotes(userId);
 
     return response.status(200).json({
       success: true,
@@ -108,7 +108,7 @@ router.get("/officers/:userId/notes", (request, response, next) => {
 router.post(
   "/officers/:userId/notes",
   requireHighCommand,
-  (request, response, next) => {
+  async (request, response, next) => {
     try {
       const userId = normalizeDiscordId(
         request.params.userId,
@@ -122,7 +122,7 @@ router.post(
         "La note"
       );
 
-      const result = addNote({
+      const result = await addNote({
         userId,
         content,
         authorId: getModeratorId(request),
@@ -141,14 +141,14 @@ router.post(
   }
 );
 
-router.get("/officers/:userId/sanctions", (request, response, next) => {
+router.get("/officers/:userId/sanctions", async (request, response, next) => {
   try {
     const userId = normalizeDiscordId(
       request.params.userId,
       "Identifiant du policier"
     );
 
-    const sanctions = listSanctions(userId);
+    const sanctions = await listSanctions(userId);
 
     return response.status(200).json({
       success: true,
@@ -163,7 +163,7 @@ router.get("/officers/:userId/sanctions", (request, response, next) => {
 router.post(
   "/officers/:userId/sanctions",
   requireHighCommand,
-  (request, response, next) => {
+  async (request, response, next) => {
     try {
       const userId = normalizeDiscordId(
         request.params.userId,
@@ -188,7 +188,7 @@ router.post(
         request.body?.expiresAt
       );
 
-      const result = addSanction({
+      const result = await addSanction({
         userId,
         type,
         reason,
