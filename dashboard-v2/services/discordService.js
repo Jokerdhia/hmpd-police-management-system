@@ -1,4 +1,4 @@
-const { REST, Routes, DiscordAPIError } = require("discord.js");
+const { REST, Routes } = require("discord.js");
 const { getAllGradeRoleIds } = require("../config/grades");
 
 const TOKEN = String(process.env.TOKEN || "").trim();
@@ -29,7 +29,10 @@ const CACHE_TTL = Number.isFinite(configuredTTL)
 /**
  * Valide un identifiant Discord.
  */
-function normalizeDiscordId(value, fieldName = "identifiant Discord") {
+function normalizeDiscordId(
+  value,
+  fieldName = "identifiant Discord"
+) {
   const id = String(value || "").trim();
 
   if (!/^\d{16,22}$/.test(id)) {
@@ -90,7 +93,7 @@ function getAvatarUrl(member) {
 }
 
 /**
- * Transforme la réponse brute Discord en format utilisé
+ * Transforme la réponse brute Discord dans le format utilisé
  * par le dashboard.
  */
 function formatMember(member, userId) {
@@ -117,7 +120,7 @@ function formatMember(member, userId) {
 }
 
 /**
- * Réponse utilisée uniquement lorsque Discord confirme
+ * Réponse utilisée lorsque Discord confirme
  * que le membre n'existe plus dans le serveur.
  */
 function createMissingMember(userId) {
@@ -134,11 +137,8 @@ function createMissingMember(userId) {
 }
 
 /**
- * Vérifie si une erreur Discord signifie réellement
- * que le membre est absent.
- *
- * Code Discord 10007 : Unknown Member.
- * Statut HTTP 404 : membre introuvable.
+ * Vérifie si une erreur Discord signifie
+ * que le membre est réellement absent.
  */
 function isUnknownMemberError(error) {
   return (
@@ -150,15 +150,11 @@ function isUnknownMemberError(error) {
 
 /**
  * Récupère un membre directement depuis Discord.
- *
- * Important :
- * - un membre réellement absent retourne found: false ;
- * - une panne Discord, un token invalide ou une erreur réseau
- *   déclenche une erreur ;
- * - une erreur temporaire ne sera donc pas interprétée comme
- *   un retrait du rôle Police.
  */
-async function getDiscordMember(userId, force = false) {
+async function getDiscordMember(
+  userId,
+  force = false
+) {
   const safeUserId = normalizeDiscordId(
     userId,
     "Identifiant du membre"
@@ -176,7 +172,10 @@ async function getDiscordMember(userId, force = false) {
 
   try {
     const member = await rest.get(
-      Routes.guildMember(GUILD_ID, safeUserId)
+      Routes.guildMember(
+        GUILD_ID,
+        safeUserId
+      )
     );
 
     const data = formatMember(
@@ -226,7 +225,9 @@ function getGradeRoleIds() {
   }
 
   return roleIds
-    .map((roleId) => String(roleId || "").trim())
+    .map((roleId) =>
+      String(roleId || "").trim()
+    )
     .filter(Boolean);
 }
 
@@ -334,6 +335,139 @@ async function setMemberGradeRole(
 }
 
 /**
+ * Prépare le contenu d'un message Discord.
+ *
+ * Accepte :
+ * - une chaîne de texte ;
+ * - un objet avec content, embeds, components, files, etc.
+ */
+function normalizeChannelMessage(message) {
+  if (typeof message === "string") {
+    const content = message.trim();
+
+    if (!content) {
+      throw new Error(
+        "Le message Discord ne peut pas être vide."
+      );
+    }
+
+    if (content.length > 2000) {
+      throw new Error(
+        "Le message Discord ne peut pas dépasser 2000 caractères."
+      );
+    }
+
+    return {
+      content,
+      allowed_mentions: {
+        parse: [],
+      },
+    };
+  }
+
+  if (
+    !message ||
+    typeof message !== "object" ||
+    Array.isArray(message)
+  ) {
+    throw new Error(
+      "Le message Discord doit être un texte ou un objet valide."
+    );
+  }
+
+  const body = {
+    ...message,
+  };
+
+  if (
+    typeof body.content === "string"
+  ) {
+    body.content = body.content.trim();
+
+    if (body.content.length > 2000) {
+      throw new Error(
+        "Le contenu Discord ne peut pas dépasser 2000 caractères."
+      );
+    }
+
+    if (!body.content) {
+      delete body.content;
+    }
+  }
+
+  if (body.embeds !== undefined) {
+    if (!Array.isArray(body.embeds)) {
+      body.embeds = [body.embeds];
+    }
+
+    body.embeds = body.embeds
+      .filter(
+        (embed) =>
+          embed &&
+          typeof embed === "object"
+      )
+      .map((embed) => {
+        if (typeof embed.toJSON === "function") {
+          return embed.toJSON();
+        }
+
+        return embed;
+      });
+
+    if (body.embeds.length > 10) {
+      throw new Error(
+        "Un message Discord ne peut pas contenir plus de 10 embeds."
+      );
+    }
+
+    if (body.embeds.length === 0) {
+      delete body.embeds;
+    }
+  }
+
+  if (
+    body.components !== undefined &&
+    !Array.isArray(body.components)
+  ) {
+    body.components = [body.components];
+  }
+
+  const hasContent =
+    typeof body.content === "string" &&
+    body.content.length > 0;
+
+  const hasEmbeds =
+    Array.isArray(body.embeds) &&
+    body.embeds.length > 0;
+
+  const hasComponents =
+    Array.isArray(body.components) &&
+    body.components.length > 0;
+
+  const hasFiles =
+    Array.isArray(body.files) &&
+    body.files.length > 0;
+
+  if (
+    !hasContent &&
+    !hasEmbeds &&
+    !hasComponents &&
+    !hasFiles
+  ) {
+    throw new Error(
+      "Le message Discord ne contient aucun contenu, embed ou composant."
+    );
+  }
+
+  body.allowed_mentions =
+    body.allowed_mentions || {
+      parse: [],
+    };
+
+  return body;
+}
+
+/**
  * Envoie un message dans un salon Discord.
  */
 async function sendChannelMessage(
@@ -344,10 +478,6 @@ async function sendChannelMessage(
     channelId || ""
   ).trim();
 
-  const safeMessage = String(
-    message || ""
-  ).trim();
-
   if (!safeChannelId) {
     return {
       sent: false,
@@ -355,34 +485,22 @@ async function sendChannelMessage(
     };
   }
 
-  if (!/^\d{16,22}$/.test(safeChannelId)) {
-    throw new Error(
-      "L'identifiant du salon Discord est invalide."
-    );
-  }
+  normalizeDiscordId(
+    safeChannelId,
+    "Identifiant du salon Discord"
+  );
 
-  if (!safeMessage) {
-    throw new Error(
-      "Le message Discord ne peut pas être vide."
-    );
-  }
-
-  if (safeMessage.length > 2000) {
-    throw new Error(
-      "Le message Discord ne peut pas dépasser 2000 caractères."
-    );
-  }
+  const body = normalizeChannelMessage(
+    message
+  );
 
   try {
     const result = await rest.post(
-      Routes.channelMessages(safeChannelId),
+      Routes.channelMessages(
+        safeChannelId
+      ),
       {
-        body: {
-          content: safeMessage,
-          allowed_mentions: {
-            parse: [],
-          },
-        },
+        body,
       }
     );
 
@@ -393,11 +511,13 @@ async function sendChannelMessage(
   } catch (error) {
     console.error(
       `❌ Impossible d'envoyer le message dans le salon ${safeChannelId} :`,
-      error?.message || error
+      error?.rawError ||
+      error?.message ||
+      error
     );
 
     throw new Error(
-      "Impossible d'envoyer le message Discord."
+      "Impossible d'envoyer le message Discord. Vérifie l'identifiant du salon et les permissions du bot."
     );
   }
 }
@@ -415,12 +535,8 @@ function clearMemberFromCache(userId) {
   }
 }
 
-
 /**
  * Récupère tous les membres du serveur Discord.
- *
- * Cette fonction permet d'ajouter automatiquement au dashboard
- * toutes les personnes qui possèdent le rôle Police.
  */
 async function listGuildMembers() {
   const members = [];
@@ -437,16 +553,24 @@ async function listGuildMembers() {
       }
     );
 
-    const list = Array.isArray(page) ? page : [];
+    const list = Array.isArray(page)
+      ? page
+      : [];
 
     for (const member of list) {
-      const userId = String(member?.user?.id || "").trim();
+      const userId = String(
+        member?.user?.id || ""
+      ).trim();
 
       if (!userId) {
         continue;
       }
 
-      const formatted = formatMember(member, userId);
+      const formatted = formatMember(
+        member,
+        userId
+      );
+
       members.push(formatted);
 
       memberCache.set(userId, {
@@ -459,7 +583,9 @@ async function listGuildMembers() {
       break;
     }
 
-    const lastId = String(list[list.length - 1]?.user?.id || "");
+    const lastId = String(
+      list[list.length - 1]?.user?.id || ""
+    );
 
     if (!lastId || lastId === after) {
       break;
@@ -479,7 +605,7 @@ function clearMemberCache() {
 }
 
 /**
- * Retourne quelques informations utiles sur le cache.
+ * Retourne quelques informations sur le cache.
  */
 function getMemberCacheInfo() {
   return {
