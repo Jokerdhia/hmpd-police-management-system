@@ -1,15 +1,25 @@
-Ajoute ces lignes dans E:\hmpd-points-bot\.env
+VARIABLES RENDER OBLIGATOIRES
 
-DASHBOARD_PORT_V2=3001
-DASHBOARD_MODERATOR_ID=TON_ID_DISCORD
-SESSION_SECRET=REMPLACE_PAR_UNE_LONGUE_CLE_ALEATOIRE
+CLIENT_ID=ID_APPLICATION_DISCORD
+CLIENT_SECRET=SECRET_APPLICATION_DISCORD
+TOKEN=TOKEN_DU_BOT
+GUILD_ID=ID_DU_SERVEUR_DISCORD
+DISCORD_CALLBACK_URL=https://hmpd-police-management-system.onrender.com/auth/discord/callback
+SESSION_SECRET=UNE_LONGUE_CLE_ALEATOIRE
 
-Pour activer la connexion Discord OAuth :
-CLIENT_SECRET=SECRET_DE_TON_APPLICATION_DISCORD
-DISCORD_CALLBACK_URL=http://localhost:3001/auth/discord/callback
+# Le rôle général que TOUS les policiers possèdent.
+ROLE_POLICE=ID_DU_ROLE_POLICE
 
-Dans le portail Discord Developer :
-OAuth2 > Redirects > ajoute exactement :
-http://localhost:3001/auth/discord/callback
+# Le rôle qui autorise l'ajout et le retrait de points.
+ROLE_HIGH_COMMAND=ID_DU_ROLE_HIGH_GRADE
 
-Sans CLIENT_SECRET, le Dashboard reste en mode local.
+ROLE_SYNC_INTERVAL_MS=30000
+NODE_ENV=production
+
+IMPORTANT
+- Mets uniquement les identifiants numériques, pas les noms des rôles.
+- Tous les policiers, y compris les High Grades, doivent posséder ROLE_POLICE.
+- Tu peux surveiller plusieurs rôles Police en les séparant par une virgule :
+  ROLE_POLICE=ID_ROLE_1,ID_ROLE_2,ID_ROLE_3
+- Retirer ROLE_POLICE remet les points à zéro, même si ROLE_HIGH_COMMAND est encore présent.
+- Retirer uniquement ROLE_HIGH_COMMAND conserve l'accès en lecture si ROLE_POLICE est présent, mais retire immédiatement les boutons de points.

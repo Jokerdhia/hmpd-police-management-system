@@ -1,13 +1,609 @@
-const {getOfficer,getAllOfficers,getOfficerHistory,getLeaderboard,changeOfficerPoints}=require('../../database');
-const {getGradeFromPoints,getNextGrade,getGradeIndex}=require('../config/grades');
-const {getDiscordMember,setMemberGradeRole,sendChannelMessage}=require('./discordService');
-const LOG=process.env.LOG_CHANNEL_ID,PROMO=process.env.PROMOTION_CHANNEL_ID,MOD=process.env.DASHBOARD_MODERATOR_ID||'DASHBOARD';
-async function enrichOfficer(o){const d=await getDiscordMember(o.user_id),n=getNextGrade(o.points);return {...o,display_name:d.displayName,username:d.username,avatar_url:d.avatarUrl,is_in_server:d.found,joined_at:d.joinedAt,next_grade:n?.name||null,next_grade_points:n?.points||null,points_until_next_grade:n?Math.max(n.points-Number(o.points),0):0};}
-async function enrich(list){const out=[];for(let i=0;i<list.length;i+=5)out.push(...await Promise.all(list.slice(i,i+5).map(enrichOfficer)));return out;}
-const listOfficers=()=>enrich(getAllOfficers());
-const getOfficerProfile=id=>enrichOfficer(getOfficer(id));
-const getEnrichedLeaderboard=(limit=25)=>enrich(getLeaderboard(limit));
-const getHistory=(id,limit=25)=>getOfficerHistory(id,limit);
-async function logChange(m,action,r,oldGrade,newGrade){const add=action==='add';await sendChannelMessage(LOG,{embeds:[{color:add?0x2ecc71:0xe74c3c,title:add?'📈 Ajout de points via Dashboard':'📉 Retrait de points via Dashboard',thumbnail:{url:m.avatarUrl},fields:[{name:'👤 Policier',value:`<@${m.userId}>`,inline:true},{name:'👮 Responsable',value:MOD==='DASHBOARD'?'Dashboard HMPD':`<@${MOD}>`,inline:true},{name:add?'➕ Points ajoutés':'➖ Points retirés',value:String(r.amount),inline:true},{name:'⭐ Ancien total',value:String(r.oldPoints),inline:true},{name:'⭐ Nouveau total',value:String(r.newPoints),inline:true},{name:'🎖️ Grade',value:oldGrade.name===newGrade.name?newGrade.name:`${oldGrade.name} ➜ ${newGrade.name}`,inline:true},{name:'📝 Raison',value:r.reason,inline:false}],timestamp:new Date().toISOString()}],allowed_mentions:{parse:[]}});}
-async function modifyOfficerPoints({userId,action,amount,reason}){if(!['add','remove'].includes(action))throw new Error('Action invalide.');if(!Number.isInteger(amount)||amount<1||amount>1000)throw new Error('Le nombre de points doit être compris entre 1 et 1000.');if(typeof reason!=='string'||reason.trim().length<3)throw new Error('La raison doit contenir au moins 3 caractères.');const d=await getDiscordMember(userId,true);if(!d.found)throw new Error("Ce policier n'est plus présent dans le serveur.");const before=getOfficer(userId),oldPoints=Number(before.points),actual=action==='remove'?Math.min(amount,oldPoints):amount,newPoints=action==='add'?oldPoints+actual:oldPoints-actual,oldGrade=getGradeFromPoints(oldPoints),newGrade=getGradeFromPoints(newPoints);await setMemberGradeRole(userId,newGrade.roleId);let result;try{result=changeOfficerPoints({userId,action,amount,grade:newGrade.name,reason:reason.trim(),moderatorId:MOD});}catch(e){await setMemberGradeRole(userId,oldGrade.roleId).catch(()=>{});throw e;}const member=await getDiscordMember(userId,true);await logChange(member,action,{...result,reason:reason.trim()},oldGrade,newGrade).catch(console.error);if(getGradeIndex(newGrade.name)>getGradeIndex(oldGrade.name))await sendChannelMessage(PROMO,{content:`🎉 Félicitations <@${userId}> !`,embeds:[{color:0xf1c40f,title:'🎖️ PROMOTION OFFICIELLE',description:`👤 **Agent :** <@${userId}>\n\n⬆️ **Ancien grade :** ${oldGrade.name}\n\n🏅 **Nouveau grade :** ${newGrade.name}\n\n⭐ **Total des points :** ${result.newPoints}`,timestamp:new Date().toISOString()}],allowed_mentions:{users:[userId],parse:[]}}).catch(console.error);return {result,officer:await getOfficerProfile(userId),oldGrade,newGrade};}
-module.exports={listOfficers,getOfficerProfile,getEnrichedLeaderboard,getHistory,modifyOfficerPoints};
+const {
+  getOfficer,
+  getAllOfficers,
+  getOfficerHistory,
+  getLeaderboard,
+  changeOfficerPoints,
+} = require("../../database");
+
+const {
+  getGradeFromPoints,
+  getNextGrade,
+  getGradeIndex,
+} = require("../config/grades");
+
+const {
+  getDiscordMember,
+  setMemberGradeRole,
+  sendChannelMessage,
+} = require("./discordService");
+
+const LOG_CHANNEL_ID = String(
+  process.env.LOG_CHANNEL_ID || ""
+).trim();
+
+const PROMOTION_CHANNEL_ID = String(
+  process.env.PROMOTION_CHANNEL_ID || ""
+).trim();
+
+const DEFAULT_MODERATOR_ID = String(
+  process.env.DASHBOARD_MODERATOR_ID || "DASHBOARD"
+).trim();
+
+const POLICE_ROLE_IDS = String(process.env.ROLE_POLICE || "")
+  .split(",")
+  .map((roleId) => roleId.trim())
+  .filter(Boolean);
+
+/*
+|--------------------------------------------------------------------------
+| Validation
+|--------------------------------------------------------------------------
+*/
+
+function normalizeUserId(userId) {
+  const value = String(userId || "").trim();
+
+  if (!/^\d{16,22}$/.test(value)) {
+    throw new Error("L'identifiant Discord du policier est invalide.");
+  }
+
+  return value;
+}
+
+function normalizeModeratorId(moderatorId) {
+  const value = String(
+    moderatorId || DEFAULT_MODERATOR_ID
+  ).trim();
+
+  if (!value) {
+    return "DASHBOARD";
+  }
+
+  return value;
+}
+
+function normalizeAction(action) {
+  const value = String(action || "").trim().toLowerCase();
+
+  if (!["add", "remove"].includes(value)) {
+    throw new Error("L'action doit être « add » ou « remove ».");
+  }
+
+  return value;
+}
+
+function normalizeAmount(amount) {
+  const value = Number(amount);
+
+  if (!Number.isInteger(value) || value < 1 || value > 1000) {
+    throw new Error(
+      "Le nombre de points doit être compris entre 1 et 1000."
+    );
+  }
+
+  return value;
+}
+
+function normalizeReason(reason) {
+  const value = String(reason || "").trim();
+
+  if (value.length < 3) {
+    throw new Error(
+      "La raison doit contenir au moins 3 caractères."
+    );
+  }
+
+  if (value.length > 1000) {
+    throw new Error(
+      "La raison ne peut pas dépasser 1000 caractères."
+    );
+  }
+
+  return value;
+}
+
+function normalizeLimit(limit, fallback = 25, maximum = 100) {
+  const value = Number.parseInt(limit, 10);
+
+  if (!Number.isInteger(value) || value <= 0) {
+    return fallback;
+  }
+
+  return Math.min(value, maximum);
+}
+
+function hasPoliceRole(member) {
+  const roles = Array.isArray(member?.roles)
+    ? member.roles.map(String)
+    : [];
+
+  return POLICE_ROLE_IDS.some((roleId) =>
+    roles.includes(roleId)
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Enrichissement des policiers
+|--------------------------------------------------------------------------
+*/
+
+async function enrichOfficer(officer) {
+  if (!officer?.user_id) {
+    throw new Error("Données du policier invalides.");
+  }
+
+  const discordMember = await getDiscordMember(
+    officer.user_id
+  );
+
+  const points = Number(officer.points) || 0;
+  const nextGrade = getNextGrade(points);
+
+  return {
+    ...officer,
+    points,
+
+    display_name:
+      discordMember.displayName ||
+      discordMember.username ||
+      officer.user_id,
+
+    username:
+      discordMember.username ||
+      officer.user_id,
+
+    avatar_url:
+      discordMember.avatarUrl ||
+      "https://cdn.discordapp.com/embed/avatars/0.png",
+
+    is_in_server: Boolean(discordMember.found),
+    has_police_role:
+      discordMember.found &&
+      hasPoliceRole(discordMember),
+
+    joined_at:
+      discordMember.joinedAt || null,
+
+    next_grade:
+      nextGrade?.name || null,
+
+    next_grade_points:
+      Number.isFinite(Number(nextGrade?.points))
+        ? Number(nextGrade.points)
+        : null,
+
+    points_until_next_grade: nextGrade
+      ? Math.max(Number(nextGrade.points) - points, 0)
+      : 0,
+  };
+}
+
+/*
+ * Traite les membres par petits groupes pour ne pas envoyer
+ * trop de requêtes simultanément à Discord.
+ */
+async function enrichOfficers(officers) {
+  const list = Array.isArray(officers)
+    ? officers
+    : [];
+
+  const enriched = [];
+  const batchSize = 5;
+
+  for (
+    let index = 0;
+    index < list.length;
+    index += batchSize
+  ) {
+    const batch = list.slice(
+      index,
+      index + batchSize
+    );
+
+    const results = await Promise.allSettled(
+      batch.map((officer) =>
+        enrichOfficer(officer)
+      )
+    );
+
+    for (let resultIndex = 0; resultIndex < results.length; resultIndex += 1) {
+      const result = results[resultIndex];
+
+      if (result.status === "fulfilled") {
+        enriched.push(result.value);
+      } else {
+        const officer = batch[resultIndex];
+
+        console.error(
+          `❌ Enrichissement impossible pour ${officer?.user_id || "inconnu"} :`,
+          result.reason?.message || result.reason
+        );
+
+        enriched.push({
+          ...officer,
+          display_name: officer?.user_id || "Membre inconnu",
+          username: officer?.user_id || "inconnu",
+          avatar_url:
+            "https://cdn.discordapp.com/embed/avatars/0.png",
+          is_in_server: false,
+          has_police_role: false,
+          joined_at: null,
+          next_grade: null,
+          next_grade_points: null,
+          points_until_next_grade: 0,
+        });
+      }
+    }
+  }
+
+  return enriched;
+}
+
+/*
+|--------------------------------------------------------------------------
+| Lecture des données
+|--------------------------------------------------------------------------
+*/
+
+async function listOfficers() {
+  return enrichOfficers(getAllOfficers());
+}
+
+async function getOfficerProfile(userId) {
+  const safeUserId = normalizeUserId(userId);
+  const officer = getOfficer(safeUserId);
+
+  return enrichOfficer(officer);
+}
+
+async function getEnrichedLeaderboard(limit = 25) {
+  const safeLimit = normalizeLimit(limit);
+  const leaderboard = getLeaderboard(safeLimit);
+
+  return enrichOfficers(leaderboard);
+}
+
+function getHistory(userId, limit = 25) {
+  const safeUserId = normalizeUserId(userId);
+  const safeLimit = normalizeLimit(limit);
+
+  return getOfficerHistory(
+    safeUserId,
+    safeLimit
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Messages Discord
+|--------------------------------------------------------------------------
+*/
+
+async function logPointsChange({
+  member,
+  action,
+  result,
+  reason,
+  oldGrade,
+  newGrade,
+  moderatorId,
+}) {
+  if (!LOG_CHANNEL_ID) {
+    return;
+  }
+
+  const isAddition = action === "add";
+  const responsibleId = normalizeModeratorId(
+    moderatorId
+  );
+
+  const responsibleText =
+    responsibleId === "DASHBOARD"
+      ? "Dashboard HMPD"
+      : `<@${responsibleId}>`;
+
+  const avatarUrl =
+    member?.avatarUrl ||
+    "https://cdn.discordapp.com/embed/avatars/0.png";
+
+  await sendChannelMessage(LOG_CHANNEL_ID, {
+    embeds: [
+      {
+        color: isAddition
+          ? 0x2ecc71
+          : 0xe74c3c,
+
+        title: isAddition
+          ? "📈 Ajout de points via Dashboard"
+          : "📉 Retrait de points via Dashboard",
+
+        thumbnail: {
+          url: avatarUrl,
+        },
+
+        fields: [
+          {
+            name: "👤 Policier",
+            value: `<@${member.userId}>`,
+            inline: true,
+          },
+          {
+            name: "👮 Responsable",
+            value: responsibleText,
+            inline: true,
+          },
+          {
+            name: isAddition
+              ? "➕ Points ajoutés"
+              : "➖ Points retirés",
+            value: String(result.amount),
+            inline: true,
+          },
+          {
+            name: "⭐ Ancien total",
+            value: String(result.oldPoints),
+            inline: true,
+          },
+          {
+            name: "⭐ Nouveau total",
+            value: String(result.newPoints),
+            inline: true,
+          },
+          {
+            name: "🎖️ Grade",
+            value:
+              oldGrade.name === newGrade.name
+                ? newGrade.name
+                : `${oldGrade.name} ➜ ${newGrade.name}`,
+            inline: true,
+          },
+          {
+            name: "📝 Raison",
+            value: reason,
+            inline: false,
+          },
+        ],
+
+        timestamp: new Date().toISOString(),
+      },
+    ],
+
+    allowed_mentions: {
+      parse: [],
+    },
+  });
+}
+
+async function sendPromotionMessage({
+  userId,
+  oldGrade,
+  newGrade,
+  newPoints,
+}) {
+  if (!PROMOTION_CHANNEL_ID) {
+    return;
+  }
+
+  await sendChannelMessage(
+    PROMOTION_CHANNEL_ID,
+    {
+      content: `🎉 Félicitations <@${userId}> !`,
+
+      embeds: [
+        {
+          color: 0xf1c40f,
+          title: "🎖️ PROMOTION OFFICIELLE",
+
+          description:
+            `👤 **Agent :** <@${userId}>\n\n` +
+            `⬆️ **Ancien grade :** ${oldGrade.name}\n\n` +
+            `🏅 **Nouveau grade :** ${newGrade.name}\n\n` +
+            `⭐ **Total des points :** ${newPoints}`,
+
+          timestamp: new Date().toISOString(),
+        },
+      ],
+
+      allowed_mentions: {
+        users: [userId],
+        parse: [],
+      },
+    }
+  );
+}
+
+/*
+|--------------------------------------------------------------------------
+| Modification des points
+|--------------------------------------------------------------------------
+*/
+
+async function modifyOfficerPoints({
+  userId,
+  action,
+  amount,
+  reason,
+  moderatorId,
+}) {
+  const safeUserId = normalizeUserId(userId);
+  const safeAction = normalizeAction(action);
+  const safeAmount = normalizeAmount(amount);
+  const safeReason = normalizeReason(reason);
+  const safeModeratorId = normalizeModeratorId(
+    moderatorId
+  );
+
+  /*
+   * Vérifie le membre directement auprès de Discord.
+   */
+  const discordMember = await getDiscordMember(
+    safeUserId,
+    true
+  );
+
+  if (!discordMember.found) {
+    throw new Error(
+      "Ce policier n'est plus présent dans le serveur."
+    );
+  }
+
+  if (discordMember.bot) {
+    throw new Error(
+      "Les points d'un bot ne peuvent pas être modifiés."
+    );
+  }
+
+  /*
+   * Le rôle Police est obligatoire.
+   */
+  if (
+    POLICE_ROLE_IDS.length > 0 &&
+    !hasPoliceRole(discordMember)
+  ) {
+    throw new Error(
+      "Ce membre ne possède plus le rôle Police."
+    );
+  }
+
+  const officerBefore = getOfficer(
+    safeUserId
+  );
+
+  const oldPoints =
+    Number(officerBefore.points) || 0;
+
+  const actualAmount =
+    safeAction === "remove"
+      ? Math.min(safeAmount, oldPoints)
+      : safeAmount;
+
+  if (
+    safeAction === "remove" &&
+    actualAmount === 0
+  ) {
+    throw new Error(
+      "Ce policier possède déjà zéro point."
+    );
+  }
+
+  const newPoints =
+    safeAction === "add"
+      ? oldPoints + actualAmount
+      : oldPoints - actualAmount;
+
+  const oldGrade =
+    getGradeFromPoints(oldPoints);
+
+  const newGrade =
+    getGradeFromPoints(newPoints);
+
+  if (!oldGrade?.name || !oldGrade?.roleId) {
+    throw new Error(
+      "L'ancien grade est mal configuré."
+    );
+  }
+
+  if (!newGrade?.name || !newGrade?.roleId) {
+    throw new Error(
+      "Le nouveau grade est mal configuré."
+    );
+  }
+
+  /*
+   * Modifie d'abord le rôle Discord.
+   * Si SQLite échoue ensuite, l'ancien rôle est restauré.
+   */
+  await setMemberGradeRole(
+    safeUserId,
+    newGrade.roleId
+  );
+
+  let result;
+
+  try {
+    result = changeOfficerPoints({
+      userId: safeUserId,
+      action: safeAction,
+      amount: safeAmount,
+      grade: newGrade.name,
+      reason: safeReason,
+      moderatorId: safeModeratorId,
+    });
+  } catch (error) {
+    /*
+     * Restauration du rôle précédent si la base échoue.
+     */
+    await setMemberGradeRole(
+      safeUserId,
+      oldGrade.roleId
+    ).catch((rollbackError) => {
+      console.error(
+        `❌ Impossible de restaurer le rôle de ${safeUserId} :`,
+        rollbackError?.message || rollbackError
+      );
+    });
+
+    throw error;
+  }
+
+  const updatedMember =
+    await getDiscordMember(
+      safeUserId,
+      true
+    );
+
+  /*
+   * Une erreur de log ne doit pas annuler la modification.
+   */
+  await logPointsChange({
+    member: updatedMember,
+    action: safeAction,
+    result,
+    reason: safeReason,
+    oldGrade,
+    newGrade,
+    moderatorId: safeModeratorId,
+  }).catch((error) => {
+    console.error(
+      "❌ Impossible d'envoyer le journal Discord :",
+      error?.message || error
+    );
+  });
+
+  const isPromotion =
+    getGradeIndex(newGrade.name) >
+    getGradeIndex(oldGrade.name);
+
+  if (isPromotion) {
+    await sendPromotionMessage({
+      userId: safeUserId,
+      oldGrade,
+      newGrade,
+      newPoints: result.newPoints,
+    }).catch((error) => {
+      console.error(
+        "❌ Impossible d'envoyer le message de promotion :",
+        error?.message || error
+      );
+    });
+  }
+
+  return {
+    result,
+    officer:
+      await getOfficerProfile(safeUserId),
+    oldGrade,
+    newGrade,
+    promoted: isPromotion,
+  };
+}
+
+module.exports = {
+  listOfficers,
+  getOfficerProfile,
+  getEnrichedLeaderboard,
+  getHistory,
+  modifyOfficerPoints,
+};

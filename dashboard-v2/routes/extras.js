@@ -1,4 +1,5 @@
 const express = require("express");
+
 const {
   listNotes,
   addNote,
@@ -6,103 +7,206 @@ const {
   addSanction,
   listActivity,
 } = require("../dashboardDatabase");
-const { getModeratorId } = require("../auth/auth");
+
+const {
+  requireHighCommand,
+  getModeratorId,
+} = require("../auth/auth");
 
 const router = express.Router();
 
+function normalizeDiscordId(value, label = "Identifiant Discord") {
+  const id = String(value || "").trim();
+
+  if (!/^\d{16,22}$/.test(id)) {
+    const error = new Error(`${label} invalide.`);
+    error.status = 400;
+    error.publicMessage = error.message;
+    throw error;
+  }
+
+  return id;
+}
+
 function cleanText(value, min, max, label) {
   const text = String(value || "").trim();
+
   if (text.length < min || text.length > max) {
-    throw new Error(`${label} doit contenir entre ${min} et ${max} caractères.`);
+    const error = new Error(
+      `${label} doit contenir entre ${min} et ${max} caractères.`
+    );
+
+    error.status = 400;
+    error.publicMessage = error.message;
+    throw error;
   }
+
   return text;
+}
+
+function normalizeLimit(value, fallback = 50, maximum = 100) {
+  const parsed = Number.parseInt(value, 10);
+
+  if (!Number.isInteger(parsed) || parsed <= 0) {
+    return fallback;
+  }
+
+  return Math.min(parsed, maximum);
+}
+
+function normalizeExpiration(value) {
+  if (value === undefined || value === null || value === "") {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    const error = new Error("La date d'expiration est invalide.");
+    error.status = 400;
+    error.publicMessage = error.message;
+    throw error;
+  }
+
+  return date.toISOString();
 }
 
 router.get("/activity", (request, response, next) => {
   try {
-    const requested = Number(request.query.limit);
-    const limit = Number.isInteger(requested)
-      ? Math.min(Math.max(requested, 1), 100)
-      : 50;
+    const limit = normalizeLimit(request.query.limit);
+    const activity = listActivity(limit);
 
-    response.json({
+    return response.status(200).json({
       success: true,
-      activity: listActivity(limit),
+      total: activity.length,
+      activity,
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
 router.get("/officers/:userId/notes", (request, response, next) => {
   try {
-    response.json({
+    const userId = normalizeDiscordId(
+      request.params.userId,
+      "Identifiant du policier"
+    );
+
+    const notes = listNotes(userId);
+
+    return response.status(200).json({
       success: true,
-      notes: listNotes(request.params.userId),
+      total: notes.length,
+      notes,
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
-router.post("/officers/:userId/notes", (request, response, next) => {
-  try {
-    const content = cleanText(request.body.content, 3, 1000, "La note");
-    const result = addNote({
-      userId: request.params.userId,
-      content,
-      authorId: getModeratorId(request),
-    });
+router.post(
+  "/officers/:userId/notes",
+  requireHighCommand,
+  (request, response, next) => {
+    try {
+      const userId = normalizeDiscordId(
+        request.params.userId,
+        "Identifiant du policier"
+      );
 
-    response.status(201).json({
-      success: true,
-      message: "Note ajoutée.",
-      result,
-    });
-  } catch (error) {
-    error.status = 400;
-    error.publicMessage = error.message;
-    next(error);
+      const content = cleanText(
+        request.body?.content,
+        3,
+        1000,
+        "La note"
+      );
+
+      const result = addNote({
+        userId,
+        content,
+        authorId: getModeratorId(request),
+      });
+
+      return response.status(201).json({
+        success: true,
+        message: "Note ajoutée.",
+        result,
+      });
+    } catch (error) {
+      error.status = error.status || 400;
+      error.publicMessage = error.publicMessage || error.message;
+      return next(error);
+    }
   }
-});
+);
 
 router.get("/officers/:userId/sanctions", (request, response, next) => {
   try {
-    response.json({
+    const userId = normalizeDiscordId(
+      request.params.userId,
+      "Identifiant du policier"
+    );
+
+    const sanctions = listSanctions(userId);
+
+    return response.status(200).json({
       success: true,
-      sanctions: listSanctions(request.params.userId),
+      total: sanctions.length,
+      sanctions,
     });
   } catch (error) {
-    next(error);
+    return next(error);
   }
 });
 
-router.post("/officers/:userId/sanctions", (request, response, next) => {
-  try {
-    const type = cleanText(request.body.type, 2, 100, "Le type");
-    const reason = cleanText(request.body.reason, 3, 1000, "La raison");
-    const expiresAt = request.body.expiresAt
-      ? String(request.body.expiresAt)
-      : null;
+router.post(
+  "/officers/:userId/sanctions",
+  requireHighCommand,
+  (request, response, next) => {
+    try {
+      const userId = normalizeDiscordId(
+        request.params.userId,
+        "Identifiant du policier"
+      );
 
-    const result = addSanction({
-      userId: request.params.userId,
-      type,
-      reason,
-      expiresAt,
-      authorId: getModeratorId(request),
-    });
+      const type = cleanText(
+        request.body?.type,
+        2,
+        100,
+        "Le type"
+      );
 
-    response.status(201).json({
-      success: true,
-      message: "Sanction enregistrée.",
-      result,
-    });
-  } catch (error) {
-    error.status = 400;
-    error.publicMessage = error.message;
-    next(error);
+      const reason = cleanText(
+        request.body?.reason,
+        3,
+        1000,
+        "La raison"
+      );
+
+      const expiresAt = normalizeExpiration(
+        request.body?.expiresAt
+      );
+
+      const result = addSanction({
+        userId,
+        type,
+        reason,
+        expiresAt,
+        authorId: getModeratorId(request),
+      });
+
+      return response.status(201).json({
+        success: true,
+        message: "Sanction enregistrée.",
+        result,
+      });
+    } catch (error) {
+      error.status = error.status || 400;
+      error.publicMessage = error.publicMessage || error.message;
+      return next(error);
+    }
   }
-});
+);
 
 module.exports = router;
