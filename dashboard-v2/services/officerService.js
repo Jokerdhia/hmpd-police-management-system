@@ -248,7 +248,13 @@ async function enrichOfficers(officers) {
 */
 
 async function listOfficers() {
-  return enrichOfficers(getAllOfficers());
+  const enriched = await enrichOfficers(getAllOfficers());
+
+  return enriched.filter(
+    (officer) =>
+      officer.is_in_server &&
+      officer.has_police_role
+  );
 }
 
 async function getOfficerProfile(userId) {
@@ -260,9 +266,16 @@ async function getOfficerProfile(userId) {
 
 async function getEnrichedLeaderboard(limit = 25) {
   const safeLimit = normalizeLimit(limit);
-  const leaderboard = getLeaderboard(safeLimit);
+  const enriched = await enrichOfficers(getAllOfficers());
 
-  return enrichOfficers(leaderboard);
+  return enriched
+    .filter(
+      (officer) =>
+        officer.is_in_server &&
+        officer.has_police_role
+    )
+    .sort((a, b) => Number(b.points) - Number(a.points))
+    .slice(0, safeLimit);
 }
 
 function getHistory(userId, limit = 25) {

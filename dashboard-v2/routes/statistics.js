@@ -1,19 +1,14 @@
 const express = require("express");
 
 const {
-  getAllOfficers,
-  countOfficers,
-} = require("../../database");
-
-const {
-  getOfficerProfile,
+  listOfficers,
 } = require("../services/officerService");
 
 const router = express.Router();
 
 router.get("/", async (request, response, next) => {
   try {
-    const officers = getAllOfficers();
+    const officers = await listOfficers();
 
     const totalPoints = officers.reduce(
       (total, officer) => total + (Number(officer.points) || 0),
@@ -46,27 +41,12 @@ router.get("/", async (request, response, next) => {
       null
     );
 
-    let highestOfficer = null;
-
-    if (highestOfficerRecord?.user_id) {
-      try {
-        highestOfficer = await getOfficerProfile(
-          highestOfficerRecord.user_id
-        );
-      } catch (error) {
-        console.error(
-          "❌ Impossible d'enrichir le meilleur policier :",
-          error?.message || error
-        );
-
-        highestOfficer = highestOfficerRecord;
-      }
-    }
+    const highestOfficer = highestOfficerRecord;
 
     return response.status(200).json({
       success: true,
       statistics: {
-        officers: countOfficers(),
+        officers: officers.length,
         totalPoints,
         averagePoints,
         highestOfficer,

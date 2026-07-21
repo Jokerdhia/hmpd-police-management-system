@@ -50,32 +50,6 @@ const POLICE_ROLE_IDS = String(
   .map((roleId) => roleId.trim())
   .filter(Boolean);
 
-/*
- * Un membre de la police possède normalement ROLE_POLICE.
- * Par sécurité, les rôles de grade donnent également l'accès.
- * Cela évite de bloquer un Officer, Sergeant, Lieutenant, etc.
- * lorsque le rôle général Police n'est pas renvoyé ou a été recréé.
- */
-const POLICE_GRADE_ROLE_IDS = [
-  process.env.ROLE_ACADEMY,
-  process.env.ROLE_OFFICER,
-  process.env.ROLE_SENIOR_OFFICER,
-  process.env.ROLE_SERGEANT,
-  process.env.ROLE_FIRST_SERGENT,
-  process.env.ROLE_LIEUTENANT,
-  process.env.ROLE_CAPTAIN,
-  process.env.ROLE_COMMANDER,
-]
-  .map((roleId) => String(roleId || "").trim())
-  .filter(Boolean);
-
-const POLICE_ACCESS_ROLE_IDS = [
-  ...new Set([
-    ...POLICE_ROLE_IDS,
-    ...POLICE_GRADE_ROLE_IDS,
-  ]),
-];
-
 const ROLE_HIGH_COMMAND = String(
   process.env.ROLE_HIGH_COMMAND ||
     DEFAULT_HIGH_COMMAND_ROLE_ID
@@ -166,7 +140,7 @@ function getPermissions(member) {
     : [];
 
   const hasPoliceRole =
-    POLICE_ACCESS_ROLE_IDS.some((policeRoleId) =>
+    POLICE_ROLE_IDS.some((policeRoleId) =>
       memberRoles.includes(policeRoleId)
     );
 
@@ -259,8 +233,8 @@ async function fetchMember(userId) {
     );
 
     console.log(
-      "Rôles donnant accès Police :",
-      POLICE_ACCESS_ROLE_IDS
+      "Rôle Police attendu :",
+      POLICE_ROLE_IDS
     );
 
     console.log(
@@ -693,7 +667,7 @@ function registerAuthRoutes(app) {
               receivedRoles:
                 permissions.roles,
               expectedPoliceRoles:
-                POLICE_ACCESS_ROLE_IDS,
+                POLICE_ROLE_IDS,
             }
           );
 

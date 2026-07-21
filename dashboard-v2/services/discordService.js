@@ -415,6 +415,62 @@ function clearMemberFromCache(userId) {
   }
 }
 
+
+/**
+ * Récupère tous les membres du serveur Discord.
+ *
+ * Cette fonction permet d'ajouter automatiquement au dashboard
+ * toutes les personnes qui possèdent le rôle Police.
+ */
+async function listGuildMembers() {
+  const members = [];
+  let after = "0";
+
+  while (true) {
+    const page = await rest.get(
+      Routes.guildMembers(GUILD_ID),
+      {
+        query: new URLSearchParams({
+          limit: "1000",
+          after,
+        }),
+      }
+    );
+
+    const list = Array.isArray(page) ? page : [];
+
+    for (const member of list) {
+      const userId = String(member?.user?.id || "").trim();
+
+      if (!userId) {
+        continue;
+      }
+
+      const formatted = formatMember(member, userId);
+      members.push(formatted);
+
+      memberCache.set(userId, {
+        time: Date.now(),
+        data: formatted,
+      });
+    }
+
+    if (list.length < 1000) {
+      break;
+    }
+
+    const lastId = String(list[list.length - 1]?.user?.id || "");
+
+    if (!lastId || lastId === after) {
+      break;
+    }
+
+    after = lastId;
+  }
+
+  return members;
+}
+
 /**
  * Vide entièrement le cache des membres.
  */
@@ -434,6 +490,7 @@ function getMemberCacheInfo() {
 
 module.exports = {
   getDiscordMember,
+  listGuildMembers,
   setMemberGradeRole,
   sendChannelMessage,
   clearMemberCache,
