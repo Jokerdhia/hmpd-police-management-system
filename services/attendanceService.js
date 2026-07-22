@@ -3,6 +3,7 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  MessageFlags,
 } = require("discord.js");
 
 const {
@@ -147,41 +148,71 @@ async function sendAttendanceLog(client, { userId, type, startedAt, endedAt, dur
 
 async function handleAttendanceButton(interaction, client) {
   if (!interaction.customId?.startsWith("attendance:")) return false;
+
+  // Discord exige une réponse en moins de 3 secondes.
+  // On accuse donc réception immédiatement, avant toute vérification ou requête SQL.
+  await interaction.deferReply({
+    flags: MessageFlags.Ephemeral,
+  });
+
   if (!interaction.guild || !interaction.member) {
-    await interaction.reply({ content: "❌ Cette action doit être utilisée dans le serveur.", ephemeral: true });
+    await interaction.editReply(
+      "❌ Cette action doit être utilisée dans le serveur."
+    );
     return true;
   }
+
   if (!memberIsPolice(interaction.member)) {
-    await interaction.reply({ content: "❌ Tu dois avoir le rôle Police pour utiliser la présence.", ephemeral: true });
+    await interaction.editReply(
+      "❌ Tu dois avoir le rôle Police pour utiliser la présence."
+    );
     return true;
   }
 
   const action = interaction.customId.split(":")[1];
-  await interaction.deferReply({ ephemeral: true });
 
   if (action === "start") {
-    const result = await startAttendance(interaction.user.id, interaction.user.id);
+    const result = await startAttendance(
+      interaction.user.id,
+      interaction.user.id
+    );
+
     if (!result.started) {
-      await interaction.editReply(`⚠️ Tu es déjà en service depuis <t:${unix(result.session.started_at)}:R>.`);
+      await interaction.editReply(
+        `⚠️ Tu es déjà en service depuis <t:${unix(result.session.started_at)}:R>.`
+      );
       return true;
     }
+
     await sendAttendanceLog(client, {
       userId: interaction.user.id,
       type: "start",
       startedAt: result.session.started_at,
       moderatorId: interaction.user.id,
     });
+
     await refreshAttendancePanel(client);
-    await interaction.editReply(`✅ Service commencé à <t:${unix(result.session.started_at)}:t>.`);
+
+    await interaction.editReply(
+      `✅ Service commencé à <t:${unix(result.session.started_at)}:t>.`
+    );
     return true;
   }
 
   if (action === "stop") {
-    const result = await stopAttendance(interaction.user.id, interaction.user.id, "manual");
+    const result = await stopAttendance(
+      interaction.user.id,
+      interaction.user.id,
+      "manual"
+    );
+
     if (!result.stopped) {
-      await interaction.editReply("⚠️ Tu n'as aucune présence active.");
+      await interaction.editReply(
+        "⚠️ Tu n'as aucune présence active."
+      );
       return true;
     }
+
     await sendAttendanceLog(client, {
       userId: interaction.user.id,
       type: "stop",
@@ -190,22 +221,36 @@ async function handleAttendanceButton(interaction, client) {
       durationSeconds: result.session.duration_seconds,
       moderatorId: interaction.user.id,
     });
+
     await refreshAttendancePanel(client);
-    await interaction.editReply(`✅ Service terminé. Durée : **${formatDuration(result.session.duration_seconds)}**.`);
+
+    await interaction.editReply(
+      `✅ Service terminé. Durée : **${formatDuration(result.session.duration_seconds)}**.`
+    );
     return true;
   }
 
   if (action === "status") {
     const active = await getActiveAttendance(interaction.user.id);
     const totals = await getAttendanceTotals("week", 100);
-    const weekly = totals.find((x) => x.user_id === interaction.user.id)?.total_seconds || 0;
+    const weekly =
+      totals.find((item) => item.user_id === interaction.user.id)
+        ?.total_seconds || 0;
+
     const status = active
       ? `🟢 En service depuis <t:${unix(active.started_at)}:R>.`
       : "🔴 Tu es actuellement hors service.";
-    await interaction.editReply(`${status}\n⏱️ Temps total cette semaine : **${formatDuration(weekly)}**.`);
+
+    await interaction.editReply(
+      `${status}
+⏱️ Temps total cette semaine : **${formatDuration(weekly)}**.`
+    );
     return true;
   }
 
+  await interaction.editReply(
+    "❌ Action de présence inconnue."
+  );
   return true;
 }
 
