@@ -8,6 +8,8 @@ const {
 
 const {
   startAttendance,
+  pauseAttendance,
+  resumeAttendance,
   stopAttendance,
   getActiveAttendance,
   getActiveAttendances,
@@ -62,32 +64,35 @@ async function buildPanelPayload() {
 
   const embed = new EmbedBuilder()
     .setColor(active.length ? 0x2ecc71 : 0x95a5a6)
-    .setTitle("🚓 PRÉSENCE HMPD")
-    .setDescription(
-      "Utilisez les boutons ci-dessous pour démarrer ou terminer votre service.\n" +
-      "Le temps est conservé dans Neon PostgreSQL, même après un redémarrage."
-    )
+    .setTitle("🚔 HARMONY POLICE DEPARTMENT")
+    .setAuthor({ name: "Duty Management System" })
     .addFields(
-      { name: `🟢 En service (${active.length})`, value: activeLines },
-      { name: "🏆 Classement de la semaine", value: weeklyLines }
+      { name: `🟢 AGENTS EN SERVICE • ${active.filter((session) => !session.paused_at).length}`, value: active.filter((session) => !session.paused_at).length ? active.filter((session) => !session.paused_at).map((session) => `🟢 <@${session.user_id}>\n└ ⏱️ En service depuis <t:${unix(session.started_at)}:R>`).join("\n\n") : "Aucun agent actuellement en service." },
+      { name: `🟡 AGENTS EN PAUSE • ${active.filter((session) => session.paused_at).length}`, value: active.filter((session) => session.paused_at).length ? active.filter((session) => session.paused_at).map((session) => `🟡 <@${session.user_id}>\n└ ☕ En pause depuis <t:${unix(session.paused_at)}:R>`).join("\n\n") : "Aucun agent en pause." },
+      { name: "🏆 CLASSEMENT HEBDOMADAIRE", value: weeklyLines }
     )
-    .setFooter({ text: "HMPD • Système de présence automatique" })
+    .setFooter({ text: "Harmony Police Department • Actualisation automatique" })
     .setTimestamp();
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId("attendance:start")
-      .setLabel("Prendre son service")
+      .setLabel("Début de service")
       .setEmoji("🟢")
       .setStyle(ButtonStyle.Success),
     new ButtonBuilder()
+      .setCustomId("attendance:pause")
+      .setLabel("Pause / Reprendre")
+      .setEmoji("☕")
+      .setStyle(ButtonStyle.Primary),
+    new ButtonBuilder()
       .setCustomId("attendance:stop")
-      .setLabel("Finir son service")
+      .setLabel("Fin de service")
       .setEmoji("🔴")
       .setStyle(ButtonStyle.Danger),
     new ButtonBuilder()
       .setCustomId("attendance:status")
-      .setLabel("Mon temps")
+      .setLabel("Mes statistiques")
       .setEmoji("⏱️")
       .setStyle(ButtonStyle.Secondary)
   );
@@ -129,17 +134,30 @@ async function sendAttendanceLog(client, { userId, type, startedAt, endedAt, dur
   if (!ATTENDANCE_LOG_CHANNEL_ID) return;
   const channel = await fetchTextChannel(client, ATTENDANCE_LOG_CHANNEL_ID);
   if (!channel) return;
+  const settings = {
+    start: { color: 0x2ecc71, title: "🟢 DÉBUT DE SERVICE" },
+    pause: { color: 0xf1c40f, title: "☕ MISE EN PAUSE" },
+    resume: { color: 0x3498db, title: "▶️ REPRISE DE SERVICE" },
+    stop: { color: 0xe74c3c, title: "🔴 FIN DE SERVICE" },
+  };
+  const current = settings[type] || settings.start;
   const started = type === "start";
   const embed = new EmbedBuilder()
-    .setColor(started ? 0x2ecc71 : 0xe74c3c)
-    .setTitle(started ? "🟢 Prise de service" : "🔴 Fin de service")
+    .setColor(current.color)
+    .setTitle(current.title)
     .addFields(
       { name: "👮 Policier", value: `<@${userId}>`, inline: true },
       { name: "📅 Début", value: `<t:${unix(startedAt)}:F>`, inline: true },
-      ...(started ? [] : [
+      ...(type === "stop" ? [
         { name: "📅 Fin", value: `<t:${unix(endedAt)}:F>`, inline: true },
         { name: "⏱️ Durée", value: formatDuration(durationSeconds), inline: true },
-      ]),
+      ] : []),
+      ...(type === "pause" && pausedAt ? [
+        { name: "☕ Pause", value: `<t:${unix(pausedAt)}:T>`, inline: true },
+      ] : []),
+      ...(type === "resume" ? [
+        { name: "▶️ Reprise", value: `<t:${Math.floor(Date.now() / 1000)}:T>`, inline: true },
+      ] : []),
       ...(moderatorId && moderatorId !== userId ? [{ name: "🛡️ Action par", value: `<@${moderatorId}>`, inline: true }] : [])
     )
     .setTimestamp();
@@ -196,6 +214,65 @@ async function handleAttendanceButton(interaction, client) {
     await interaction.editReply(
       `✅ Service commencé à <t:${unix(result.session.started_at)}:t>.`
     );
+    return true;
+  }
+
+
+  if (action === "pause") {
+    const current = await getActiveAttendance(interaction.user.id);
+
+    if (!current) {
+      await interaction.editReply(
+        "⚠️ Commence d'abord ton service avant de prendre une pause."
+      );
+      return true;
+    }
+
+    if (current.paused_at) {
+      const result = await resumeAttendance(interaction.user.id);
+
+      await interaction.editReply(
+        result.resumed
+          ? "▶️ Service repris. Le compteur est de nouveau actif."
+          : "⚠️ Ton service n'est pas en pause."
+      );
+
+      if (result.resumed) {
+        await Promise.allSettled([
+          sendAttendanceLog(client, {
+            userId: interaction.user.id,
+            type: "resume",
+            startedAt: result.session.started_at,
+            moderatorId: interaction.user.id,
+          }),
+          refreshAttendancePanel(client),
+        ]);
+      }
+
+      return true;
+    }
+
+    const result = await pauseAttendance(interaction.user.id);
+
+    await interaction.editReply(
+      result.paused
+        ? "☕ Pause commencée. Le compteur est temporairement arrêté."
+        : "⚠️ Impossible de mettre ton service en pause."
+    );
+
+    if (result.paused) {
+      await Promise.allSettled([
+        sendAttendanceLog(client, {
+          userId: interaction.user.id,
+          type: "pause",
+          startedAt: result.session.started_at,
+          pausedAt: result.session.paused_at,
+          moderatorId: interaction.user.id,
+        }),
+        refreshAttendancePanel(client),
+      ]);
+    }
+
     return true;
   }
 

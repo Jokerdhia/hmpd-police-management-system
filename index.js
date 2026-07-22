@@ -827,10 +827,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (handled) return;
     } catch (error) {
       console.error("❌ Erreur bouton de présence :", error);
-      const payload = {
-  content: "❌ Impossible de traiter la présence pour le moment.",
-  flags: MessageFlags.Ephemeral
-};
+      const payload = { content: "❌ Impossible de traiter la présence pour le moment.", ephemeral: true };
       if (interaction.deferred || interaction.replied) await interaction.editReply(payload).catch(() => {});
       else await interaction.reply(payload).catch(() => {});
       return;

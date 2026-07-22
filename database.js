@@ -49,6 +49,8 @@ const ready = (async () => {
       started_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
       ended_at TIMESTAMPTZ,
       duration_seconds INTEGER,
+      paused_at TIMESTAMPTZ,
+      paused_seconds INTEGER NOT NULL DEFAULT 0,
       started_by TEXT NOT NULL,
       ended_by TEXT,
       end_reason TEXT,
@@ -67,6 +69,12 @@ const ready = (async () => {
       value TEXT NOT NULL,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+
+    ALTER TABLE attendance_sessions
+      ADD COLUMN IF NOT EXISTS paused_at TIMESTAMPTZ;
+
+    ALTER TABLE attendance_sessions
+      ADD COLUMN IF NOT EXISTS paused_seconds INTEGER NOT NULL DEFAULT 0;
   `);
   const { rows } = await pool.query("SELECT COUNT(*)::int AS total FROM officers");
   console.log("✅ Neon PostgreSQL connecté.");
@@ -213,78 +221,261 @@ async function startAttendance(userId, startedBy = userId) {
   await ready;
   const safeUserId = normalizeUserId(userId);
   const safeStartedBy = normalizeModeratorId(startedBy);
+
   try {
     const { rows } = await pool.query(
-      `INSERT INTO attendance_sessions (user_id, started_by)
-       VALUES ($1, $2)
-       RETURNING id, user_id, started_at, ended_at, duration_seconds`,
+      `INSERT INTO attendance_sessions (
+         user_id,
+         started_by,
+         paused_at,
+         paused_seconds
+       )
+       VALUES ($1, $2, NULL, 0)
+       RETURNING
+         id,
+         user_id,
+         started_at,
+         ended_at,
+         duration_seconds,
+         paused_at,
+         paused_seconds`,
       [safeUserId, safeStartedBy]
     );
+
     return { started: true, session: rows[0] };
   } catch (error) {
     if (error?.code === "23505") {
       const current = await getActiveAttendance(safeUserId);
-      return { started: false, reason: "already_active", session: current };
+      return {
+        started: false,
+        reason: "already_active",
+        session: current,
+      };
     }
+
     throw error;
   }
 }
 
-async function stopAttendance(userId, endedBy = userId, endReason = "manual") {
+async function pauseAttendance(userId) {
   await ready;
   const safeUserId = normalizeUserId(userId);
-  const safeEndedBy = normalizeModeratorId(endedBy);
-  const safeReason = String(endReason || "manual").trim().slice(0, 200) || "manual";
+
   const { rows } = await pool.query(
     `UPDATE attendance_sessions
-     SET ended_at = CURRENT_TIMESTAMP,
-         duration_seconds = GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at)))::int),
-         ended_by = $2,
-         end_reason = $3
+     SET paused_at = CURRENT_TIMESTAMP
      WHERE id = (
-       SELECT id FROM attendance_sessions
-       WHERE user_id = $1 AND ended_at IS NULL
+       SELECT id
+       FROM attendance_sessions
+       WHERE user_id = $1
+         AND ended_at IS NULL
+         AND paused_at IS NULL
        ORDER BY started_at DESC
        LIMIT 1
      )
-     RETURNING id, user_id, started_at, ended_at, duration_seconds, started_by, ended_by, end_reason`,
+     RETURNING
+       id,
+       user_id,
+       started_at,
+       paused_at,
+       paused_seconds`,
+    [safeUserId]
+  );
+
+  if (rows[0]) {
+    return { paused: true, session: rows[0] };
+  }
+
+  const current = await getActiveAttendance(safeUserId);
+
+  return {
+    paused: false,
+    reason: current ? "already_paused" : "not_active",
+    session: current,
+  };
+}
+
+async function resumeAttendance(userId) {
+  await ready;
+  const safeUserId = normalizeUserId(userId);
+
+  const { rows } = await pool.query(
+    `UPDATE attendance_sessions
+     SET paused_seconds =
+           COALESCE(paused_seconds, 0)
+           + GREATEST(
+               0,
+               FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - paused_at)))::int
+             ),
+         paused_at = NULL
+     WHERE id = (
+       SELECT id
+       FROM attendance_sessions
+       WHERE user_id = $1
+         AND ended_at IS NULL
+         AND paused_at IS NOT NULL
+       ORDER BY started_at DESC
+       LIMIT 1
+     )
+     RETURNING
+       id,
+       user_id,
+       started_at,
+       paused_at,
+       paused_seconds`,
+    [safeUserId]
+  );
+
+  if (rows[0]) {
+    return { resumed: true, session: rows[0] };
+  }
+
+  const current = await getActiveAttendance(safeUserId);
+
+  return {
+    resumed: false,
+    reason: current ? "not_paused" : "not_active",
+    session: current,
+  };
+}
+
+async function stopAttendance(
+  userId,
+  endedBy = userId,
+  endReason = "manual"
+) {
+  await ready;
+
+  const safeUserId = normalizeUserId(userId);
+  const safeEndedBy = normalizeModeratorId(endedBy);
+  const safeReason =
+    String(endReason || "manual").trim().slice(0, 200) || "manual";
+
+  const { rows } = await pool.query(
+    `UPDATE attendance_sessions
+     SET ended_at = CURRENT_TIMESTAMP,
+         paused_seconds =
+           COALESCE(paused_seconds, 0)
+           + CASE
+               WHEN paused_at IS NOT NULL
+               THEN GREATEST(
+                 0,
+                 FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - paused_at)))::int
+               )
+               ELSE 0
+             END,
+         duration_seconds = GREATEST(
+           0,
+           FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at)))::int
+           - COALESCE(paused_seconds, 0)
+           - CASE
+               WHEN paused_at IS NOT NULL
+               THEN GREATEST(
+                 0,
+                 FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - paused_at)))::int
+               )
+               ELSE 0
+             END
+         ),
+         paused_at = NULL,
+         ended_by = $2,
+         end_reason = $3
+     WHERE id = (
+       SELECT id
+       FROM attendance_sessions
+       WHERE user_id = $1
+         AND ended_at IS NULL
+       ORDER BY started_at DESC
+       LIMIT 1
+     )
+     RETURNING
+       id,
+       user_id,
+       started_at,
+       ended_at,
+       duration_seconds,
+       paused_at,
+       paused_seconds,
+       started_by,
+       ended_by,
+       end_reason`,
     [safeUserId, safeEndedBy, safeReason]
   );
-  return rows[0] ? { stopped: true, session: rows[0] } : { stopped: false, reason: "not_active" };
+
+  return rows[0]
+    ? { stopped: true, session: rows[0] }
+    : { stopped: false, reason: "not_active" };
 }
 
 async function getActiveAttendance(userId) {
   await ready;
+
   const { rows } = await pool.query(
-    `SELECT id, user_id, started_at, ended_at, duration_seconds, started_by
+    `SELECT
+       id,
+       user_id,
+       started_at,
+       ended_at,
+       duration_seconds,
+       paused_at,
+       COALESCE(paused_seconds, 0) AS paused_seconds,
+       started_by
      FROM attendance_sessions
-     WHERE user_id = $1 AND ended_at IS NULL
-     ORDER BY started_at DESC LIMIT 1`,
+     WHERE user_id = $1
+       AND ended_at IS NULL
+     ORDER BY started_at DESC
+     LIMIT 1`,
     [normalizeUserId(userId)]
   );
+
   return rows[0] || null;
 }
 
 async function getActiveAttendances() {
   await ready;
+
   const { rows } = await pool.query(
-    `SELECT id, user_id, started_at, started_by
+    `SELECT
+       id,
+       user_id,
+       started_at,
+       paused_at,
+       COALESCE(paused_seconds, 0) AS paused_seconds,
+       started_by
      FROM attendance_sessions
      WHERE ended_at IS NULL
-     ORDER BY started_at ASC`
+     ORDER BY
+       CASE WHEN paused_at IS NULL THEN 0 ELSE 1 END,
+       started_at ASC`
   );
+
   return rows;
 }
 
 async function getAttendanceTotals(period = "week", limit = 25) {
   await ready;
-  const allowed = { day: "day", week: "week", month: "month" };
+
+  const allowed = {
+    day: "day",
+    week: "week",
+    month: "month",
+  };
+
   const unit = allowed[period] || "week";
+
   const { rows } = await pool.query(
-    `SELECT user_id,
+    `SELECT
+       user_id,
        SUM(
-         CASE WHEN ended_at IS NULL
-           THEN GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at)))::int)
+         CASE
+           WHEN ended_at IS NULL
+           THEN GREATEST(
+             0,
+             FLOOR(EXTRACT(EPOCH FROM (
+               COALESCE(paused_at, CURRENT_TIMESTAMP) - started_at
+             )))::int
+             - COALESCE(paused_seconds, 0)
+           )
            ELSE COALESCE(duration_seconds, 0)
          END
        )::bigint AS total_seconds
@@ -295,7 +486,11 @@ async function getAttendanceTotals(period = "week", limit = 25) {
      LIMIT $2`,
     [unit, normalizeLimit(limit, 25, 100)]
   );
-  return rows.map(r => ({...r, total_seconds: Number(r.total_seconds || 0)}));
+
+  return rows.map((row) => ({
+    ...row,
+    total_seconds: Number(row.total_seconds || 0),
+  }));
 }
 
 async function setBotSetting(key, value) {
@@ -324,6 +519,14 @@ async function closeDatabase() {
 module.exports = {
   ready, getOfficer, updateOfficer, changeOfficerPoints, addPointsHistory,
   getOfficerHistory, getLeaderboard, getAllOfficers, countOfficers,
-  startAttendance, stopAttendance, getActiveAttendance, getActiveAttendances,
-  getAttendanceTotals, setBotSetting, getBotSetting, closeDatabase
+  startAttendance,
+  pauseAttendance,
+  resumeAttendance,
+  stopAttendance,
+  getActiveAttendance,
+  getActiveAttendances,
+  getAttendanceTotals,
+  setBotSetting,
+  getBotSetting,
+  closeDatabase
 };
