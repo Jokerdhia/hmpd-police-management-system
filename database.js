@@ -505,6 +505,23 @@ async function getAttendanceTotals(period = "week", limit = 25) {
   }));
 }
 
+async function resetOfficerAttendance(userId) {
+  await ready;
+
+  const safeUserId = normalizeUserId(userId);
+
+  const result = await pool.query(
+    `DELETE FROM attendance_sessions
+     WHERE user_id = $1`,
+    [safeUserId]
+  );
+
+  return {
+    reset: result.rowCount > 0,
+    deletedSessions: result.rowCount,
+  };
+}
+
 async function setBotSetting(key, value) {
   await ready;
   const safeKey = String(key || "").trim();
@@ -538,6 +555,7 @@ module.exports = {
   getActiveAttendance,
   getActiveAttendances,
   getAttendanceTotals,
+  resetOfficerAttendance,
   setBotSetting,
   getBotSetting,
   closeDatabase

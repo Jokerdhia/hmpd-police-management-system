@@ -2,6 +2,7 @@ const {
   getAllOfficers,
   getOfficer,
   updateOfficer,
+  resetOfficerAttendance,
 } = require("../../database");
 
 const {
@@ -83,6 +84,7 @@ async function syncPoliceRoles() {
 
     let addedCount = 0;
     let resetCount = 0;
+    let attendanceResetCount = 0;
 
     /*
     |--------------------------------------------------------------------------
@@ -137,6 +139,18 @@ async function syncPoliceRoles() {
             `🔄 Points remis à zéro pour ${userId} : rôle Police retiré.`
           );
         }
+
+        const attendanceResult =
+          await resetOfficerAttendance(userId);
+
+        if (attendanceResult.reset) {
+          attendanceResetCount += 1;
+
+          console.log(
+            `⏱️ Présence remise à zéro pour ${userId} : ` +
+            `${attendanceResult.deletedSessions} session(s) supprimée(s).`
+          );
+        }
       }
     }
 
@@ -144,7 +158,8 @@ async function syncPoliceRoles() {
       `✅ Synchronisation Police : ` +
       `${policeMembers.length} actif(s), ` +
       `${addedCount} ajouté(s), ` +
-      `${resetCount} remis à zéro.`
+      `${resetCount} point(s) remis à zéro, ` +
+      `${attendanceResetCount} présence(s) remise(s) à zéro.`
     );
   } catch (error) {
     console.error(
