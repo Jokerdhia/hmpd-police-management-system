@@ -1109,15 +1109,46 @@ client.on(Events.InteractionCreate, async (interaction) => {
     */
 
     if (interaction.commandName === "presencepanel") {
-      if (!isHighCommand(interaction)) {
-        await interaction.reply(privateReply("❌ Cette commande est réservée au High Command."));
-        return;
-      }
-      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-      await ensureAttendancePanel(client, false);
-      await interaction.editReply("✅ Le panneau de présence a été créé ou actualisé.");
+  await interaction.deferReply({
+    flags: MessageFlags.Ephemeral,
+  });
+
+  if (!isHighCommand(interaction)) {
+    await interaction.editReply(
+      "❌ Cette commande est réservée au High Command."
+    );
+    return;
+  }
+
+  try {
+    const panel = await ensureAttendancePanel(
+      client,
+      false
+    );
+
+    if (!panel) {
+      await interaction.editReply(
+        "❌ Le salon de présence n'est pas configuré."
+      );
       return;
     }
+
+    await interaction.editReply(
+      "✅ Le panneau de présence a été créé ou actualisé."
+    );
+  } catch (error) {
+    console.error(
+      "❌ Création du panneau impossible :",
+      error?.message || error
+    );
+
+    await interaction.editReply(
+      "❌ Impossible de créer le panneau. Vérifie l'ID du salon et les permissions du bot."
+    );
+  }
+
+  return;
+}
 
     /*
     |--------------------------------------------------------------------------
