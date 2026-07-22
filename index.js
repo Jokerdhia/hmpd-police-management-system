@@ -448,37 +448,60 @@ async function sendDemotionLog({
   newGrade,
   points,
 }) {
-  const logChannel = await fetchTextChannel(
-    guild,
-    LOG_CHANNEL_ID
-  );
+  const graduationChannel =
+    await fetchTextChannel(
+      guild,
+      PROMOTION_CHANNEL_ID
+    );
 
-  if (!logChannel) {
+  if (!graduationChannel) {
+    console.error(
+      "❌ Salon des promotions et rétrogradations introuvable."
+    );
     return;
   }
 
   const embed = new EmbedBuilder()
-    .setColor(0xc0392b)
-    .setTitle("🔻 RÉTROGRADATION AUTOMATIQUE")
-    .setDescription(
-      [
-        `👤 **Policier :** ${member}`,
-        "",
-        `⬇️ **Ancien grade :** ${oldGrade.name}`,
-        "",
-        `🎖️ **Nouveau grade :** ${newGrade.name}`,
-        "",
-        `⭐ **Points restants :** ${points}`,
-      ].join("\n")
+    .setColor(0xe74c3c)
+    .setTitle("🔻 RÉTROGRADATION OFFICIELLE")
+    .setThumbnail(
+      member.user.displayAvatarURL({
+        size: 256,
+      })
+    )
+    .addFields(
+      {
+        name: "👤 Agent",
+        value: `${member}`,
+        inline: false,
+      },
+      {
+        name: "⬇️ Ancien grade",
+        value: oldGrade.name,
+        inline: false,
+      },
+      {
+        name: "🎖️ Nouveau grade",
+        value: newGrade.name,
+        inline: false,
+      },
+      {
+        name: "⭐ Total des points",
+        value: `${points}`,
+        inline: false,
+      }
     )
     .setFooter({
-      text: "HMPD • Automatic Demotion",
+      text: "Harmony Police Department • Graduation",
     })
     .setTimestamp();
 
-  await logChannel.send({
+  await graduationChannel.send({
+    content: `🔻 Rétrogradation de ${member}`,
     embeds: [embed],
     allowedMentions: {
+      users: [member.id],
+      roles: [],
       parse: [],
     },
   });
