@@ -12,6 +12,7 @@ const officersRoutes = require("./routes/officers");
 const statisticsRoutes = require("./routes/statistics");
 const dashboardRoutes = require("./routes/dashboard");
 const extrasRoutes = require("./routes/extras");
+const attendanceRoutes = require("./routes/attendance");
 
 const {
   oauthEnabled,
@@ -338,6 +339,11 @@ app.use(
 app.use(
   "/api",
   extrasRoutes
+);
+
+app.use(
+  "/api/attendance",
+  attendanceRoutes
 );
 
 /* =========================================================

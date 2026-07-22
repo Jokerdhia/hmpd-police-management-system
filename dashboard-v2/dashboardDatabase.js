@@ -27,5 +27,64 @@ async function updateSanctionStatus(id,status){await ready;const s=String(status
 async function deleteSanction(id){await ready;const r=await pool.query("DELETE FROM officer_sanctions WHERE id=$1",[parseInt(id,10)]);return{deleted:r.rowCount>0}}
 async function listActivity(limit=50){await ready;return (await pool.query("SELECT id,user_id,action,amount,old_points,new_points,reason,moderator_id,created_at FROM points_history ORDER BY id DESC LIMIT $1",[lim(limit)])).rows}
 async function listOfficerActivity(userId,limit=50){await ready;return (await pool.query("SELECT id,user_id,action,amount,old_points,new_points,reason,moderator_id,created_at FROM points_history WHERE user_id=$1 ORDER BY id DESC LIMIT $2",[txt(userId,"userId",64),lim(limit)])).rows}
+async function getAttendanceSessions(limit=100){
+  await ready;
+  return (await pool.query(`
+    SELECT id,user_id,started_at,ended_at,duration_seconds,paused_at,
+           COALESCE(paused_seconds,0) AS paused_seconds,
+           COALESCE(pause_count,0) AS pause_count,
+           started_by,ended_by,end_reason
+    FROM attendance_sessions
+    ORDER BY started_at DESC
+    LIMIT $1`,[lim(limit,100,500)])).rows;
+}
+async function getAttendanceActive(){
+  await ready;
+  return (await pool.query(`
+    SELECT id,user_id,started_at,paused_at,
+           COALESCE(paused_seconds,0) AS paused_seconds,
+           COALESCE(pause_count,0) AS pause_count,started_by
+    FROM attendance_sessions
+    WHERE ended_at IS NULL
+    ORDER BY CASE WHEN paused_at IS NULL THEN 0 ELSE 1 END, started_at ASC`)).rows;
+}
+async function getAttendanceTotalsDashboard(period='week',limit=100){
+  await ready;
+  const allowed={day:'day',week:'week',month:'month'};
+  const unit=allowed[period]||'week';
+  const rows=(await pool.query(`
+    SELECT user_id,
+      SUM(CASE WHEN ended_at IS NULL THEN GREATEST(0,
+        FLOOR(EXTRACT(EPOCH FROM (COALESCE(paused_at,CURRENT_TIMESTAMP)-started_at)))::int
+        - COALESCE(paused_seconds,0))
+      ELSE COALESCE(duration_seconds,0) END)::bigint AS total_seconds,
+      COUNT(*)::int AS sessions
+    FROM attendance_sessions
+    WHERE started_at >= date_trunc($1,CURRENT_TIMESTAMP)
+    GROUP BY user_id
+    ORDER BY total_seconds DESC
+    LIMIT $2`,[unit,lim(limit,100,500)])).rows;
+  return rows.map(r=>({...r,total_seconds:Number(r.total_seconds||0),sessions:Number(r.sessions||0)}));
+}
+async function getAttendanceDaily(days=7){
+  await ready;
+  const safe=Math.min(Math.max(parseInt(days,10)||7,1),31);
+  const rows=(await pool.query(`
+    WITH dates AS (
+      SELECT generate_series(
+        date_trunc('day',CURRENT_TIMESTAMP)-($1::int-1)*interval '1 day',
+        date_trunc('day',CURRENT_TIMESTAMP),interval '1 day') AS day
+    )
+    SELECT d.day,
+      COALESCE(SUM(CASE WHEN s.id IS NULL THEN 0 ELSE
+        CASE WHEN s.ended_at IS NULL THEN GREATEST(0,
+          FLOOR(EXTRACT(EPOCH FROM (COALESCE(s.paused_at,CURRENT_TIMESTAMP)-s.started_at)))::int
+          - COALESCE(s.paused_seconds,0))
+        ELSE COALESCE(s.duration_seconds,0) END END),0)::bigint AS total_seconds
+    FROM dates d
+    LEFT JOIN attendance_sessions s ON date_trunc('day',s.started_at)=d.day
+    GROUP BY d.day ORDER BY d.day`,[safe])).rows;
+  return rows.map(r=>({day:r.day,total_seconds:Number(r.total_seconds||0)}));
+}
 async function closeDatabase(){await pool.end()}
-module.exports={listNotes,addNote,deleteNote,listSanctions,addSanction,updateSanctionStatus,deleteSanction,listActivity,listOfficerActivity,closeDatabase};
+module.exports={listNotes,addNote,deleteNote,listSanctions,addSanction,updateSanctionStatus,deleteSanction,listActivity,listOfficerActivity,getAttendanceSessions,getAttendanceActive,getAttendanceTotalsDashboard,getAttendanceDaily,closeDatabase};

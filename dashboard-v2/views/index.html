@@ -23,6 +23,7 @@
         <button class="nav-item" data-page="officers"><span>♟</span>Policiers</button>
         <button class="nav-item" data-page="leaderboard"><span>★</span>Classement</button>
         <button class="nav-item" data-page="activity"><span>≡</span>Activité</button>
+        <button class="nav-item" data-page="attendance"><span>◉</span>Présence</button>
       </nav>
 
       <div class="sidebar-user" id="currentUser">
@@ -117,6 +118,23 @@
         </article>
       </section>
 
+
+      <section id="attendancePage" class="page">
+        <div class="attendance-stats">
+          <article class="stat-card attendance-active"><div class="stat-icon">🟢</div><div><span>En service</span><strong id="attendanceActive">0</strong></div></article>
+          <article class="stat-card attendance-paused"><div class="stat-icon">☕</div><div><span>En pause</span><strong id="attendancePaused">0</strong></div></article>
+          <article class="stat-card"><div class="stat-icon">⏱</div><div><span>Temps aujourd'hui</span><strong id="attendanceToday">0 min</strong></div></article>
+          <article class="stat-card"><div class="stat-icon">📆</div><div><span>Temps cette semaine</span><strong id="attendanceWeek">0 min</strong></div></article>
+        </div>
+        <div class="attendance-grid">
+          <article class="panel"><div class="panel-head"><div><h2>État des policiers</h2><p>Service, pause et temps cumulés</p></div><input class="search" id="attendanceSearch" type="search" placeholder="Rechercher un policier..."></div><div class="table-scroll"><table><thead><tr><th>Policier</th><th>Statut</th><th>Session</th><th>Aujourd'hui</th><th>Semaine</th><th>Mois</th><th></th></tr></thead><tbody id="attendanceTableBody"></tbody></table></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Top semaine</h2><p>Temps de présence</p></div></div><div id="attendanceRanking" class="attendance-ranking"></div></article>
+        </div>
+        <div class="attendance-grid panel-spaced">
+          <article class="panel"><div class="panel-head"><div><h2>Activité sur 7 jours</h2><p>Temps total travaillé par jour</p></div></div><div class="chart-wrap"><canvas id="attendanceChart"></canvas></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Historique récent</h2><p>Dernières sessions terminées</p></div></div><div id="attendanceHistory" class="attendance-history"></div></article>
+        </div>
+      </section>
       <section id="activityPage" class="page">
         <article class="panel">
           <div class="panel-head"><div><h2>Journal d'activité</h2><p>Historique récent des modifications</p></div></div>
@@ -195,5 +213,6 @@
   </div>
 
   <script src="/js/dashboard.js"></script>
+  <script src="/js/attendance.js"></script>
 </body>
 </html>
