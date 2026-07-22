@@ -4,6 +4,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   MessageFlags,
+  PermissionFlagsBits,
 } = require("discord.js");
 
 const {
@@ -21,6 +22,10 @@ const {
 const ATTENDANCE_CHANNEL_ID = String(process.env.ATTENDANCE_CHANNEL_ID || "").trim();
 const ATTENDANCE_LOG_CHANNEL_ID = String(process.env.ATTENDANCE_LOG_CHANNEL_ID || "").trim();
 const ROLE_POLICE = String(process.env.ROLE_POLICE || "").trim();
+const ROLE_HIGH_COMMAND = String(
+  process.env.ROLE_HIGH_COMMAND || ""
+).trim();
+
 const PANEL_SETTING_KEY = "attendance_panel_message_id";
 
 function formatDuration(totalSeconds) {
@@ -40,13 +45,28 @@ function memberIsPolice(member) {
   return Boolean(ROLE_POLICE && member?.roles?.cache?.has(ROLE_POLICE));
 }
 
+function memberIsHighCommand(member, interaction) {
+  const hasRole = Boolean(
+    ROLE_HIGH_COMMAND &&
+    member?.roles?.cache?.has(ROLE_HIGH_COMMAND)
+  );
+
+  const isAdministrator = Boolean(
+    interaction?.memberPermissions?.has(
+      PermissionFlagsBits.Administrator
+    )
+  );
+
+  return hasRole || isAdministrator;
+}
+
 async function fetchTextChannel(client, channelId) {
   if (!channelId) return null;
   const channel = await client.channels.fetch(channelId).catch(() => null);
   return channel?.isTextBased?.() ? channel : null;
 }
 
-async function buildPanelPayload() {
+async function buildPanelPayload(client) {
   const active = await getActiveAttendances();
   const weekly = await getAttendanceTotals("week", 3);
 
@@ -184,9 +204,48 @@ async function buildPanelPayload() {
       .setStyle(ButtonStyle.Secondary)
   );
 
+  const forceButtons = [];
+
+  for (const session of active.slice(0, 20)) {
+    const user = await client.users
+      .fetch(session.user_id)
+      .catch(() => null);
+
+    const label = String(
+      user?.globalName ||
+      user?.username ||
+      session.user_id
+    )
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 55);
+
+    forceButtons.push(
+      new ButtonBuilder()
+        .setCustomId(`attendance:force:${session.user_id}`)
+        .setLabel(`Forcer fin • ${label}`)
+        .setEmoji("🛑")
+        .setStyle(ButtonStyle.Secondary)
+    );
+  }
+
+  const forceRows = [];
+
+  for (
+    let index = 0;
+    index < forceButtons.length;
+    index += 5
+  ) {
+    forceRows.push(
+      new ActionRowBuilder().addComponents(
+        forceButtons.slice(index, index + 5)
+      )
+    );
+  }
+
   return {
     embeds: [embed],
-    components: [row],
+    components: [row, ...forceRows],
     allowedMentions: {
       parse: [],
     },
@@ -201,7 +260,7 @@ async function ensureAttendancePanel(client, forceNew = false) {
   const channel = await fetchTextChannel(client, ATTENDANCE_CHANNEL_ID);
   if (!channel) throw new Error("Salon de présence introuvable ou non textuel.");
 
-  const payload = await buildPanelPayload();
+  const payload = await buildPanelPayload(client);
   let message = null;
   if (!forceNew) {
     const messageId = await getBotSetting(PANEL_SETTING_KEY);
@@ -271,6 +330,11 @@ async function sendAttendanceLog(
       title: "🔴 FIN DE SERVICE",
       status: "Service terminé",
     },
+    force: {
+      color: 0x992d22,
+      title: "🛑 FIN DE SERVICE FORCÉE",
+      status: "Service terminé par le High Command",
+    },
   };
 
   const current =
@@ -319,7 +383,7 @@ async function sendAttendanceLog(
     });
   }
 
-  if (type === "stop") {
+  if (type === "stop" || type === "force") {
     embed.addFields(
       {
         name: "🕒 Fin du service",
@@ -334,6 +398,17 @@ async function sendAttendanceLog(
         inline: true,
       }
     );
+  }
+
+  if (
+    type === "force" &&
+    moderatorId
+  ) {
+    embed.addFields({
+      name: "🛡️ Action effectuée par",
+      value: `<@${moderatorId}>`,
+      inline: true,
+    });
   }
 
   if (user) {
@@ -388,7 +463,70 @@ async function handleAttendanceButton(interaction, client) {
     return true;
   }
 
-  const action = interaction.customId.split(":")[1];
+  const customIdParts = interaction.customId.split(":");
+  const action = customIdParts[1];
+
+  if (action === "force") {
+    if (
+      !memberIsHighCommand(
+        interaction.member,
+        interaction
+      )
+    ) {
+      await interaction.editReply(
+        "❌ Cette action est réservée au High Command."
+      );
+      return true;
+    }
+
+    const targetUserId = String(
+      customIdParts[2] || ""
+    ).trim();
+
+    if (!/^\d{16,22}$/.test(targetUserId)) {
+      await interaction.editReply(
+        "❌ Identifiant du policier invalide."
+      );
+      return true;
+    }
+
+    const result = await stopAttendance(
+      targetUserId,
+      interaction.user.id,
+      "forced_by_high_command"
+    );
+
+    if (!result.stopped) {
+      await interaction.editReply(
+        "⚠️ Ce policier n'a plus de service actif."
+      );
+
+      await refreshAttendancePanel(client);
+      return true;
+    }
+
+    await interaction.editReply(
+      `✅ Le service de <@${targetUserId}> a été terminé de force.\n` +
+      `⏱️ Temps comptabilisé : **${formatDuration(
+        result.session.duration_seconds
+      )}**.`
+    );
+
+    await Promise.allSettled([
+      sendAttendanceLog(client, {
+        userId: targetUserId,
+        type: "force",
+        startedAt: result.session.started_at,
+        endedAt: result.session.ended_at,
+        durationSeconds:
+          result.session.duration_seconds,
+        moderatorId: interaction.user.id,
+      }),
+      refreshAttendancePanel(client),
+    ]);
+
+    return true;
+  }
 
   if (action === "start") {
     const result = await startAttendance(
