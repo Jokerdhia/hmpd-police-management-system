@@ -48,7 +48,7 @@ async function fetchTextChannel(client, channelId) {
 
 async function buildPanelPayload() {
   const active = await getActiveAttendances();
-  const weekly = await getAttendanceTotals("week", 5);
+  const weekly = await getAttendanceTotals("week", 3);
 
   const working = active.filter(
     (session) => !session.paused_at
@@ -62,35 +62,35 @@ async function buildPanelPayload() {
     ? working
         .slice(0, 15)
         .map(
-          (session, index) =>
-            `**${index + 1}.** 🟢 <@${session.user_id}>\n` +
-            `└ En service depuis <t:${unix(session.started_at)}:R>`
+          (session) =>
+            `🟢 <@${session.user_id}>\n` +
+            `└ ⏱️ En service depuis <t:${unix(session.started_at)}:R>`
         )
         .join("\n\n")
-    : "```Aucun agent actuellement en service.```";
+    : "Aucun agent actuellement en service.";
 
   const pausedLines = paused.length
     ? paused
         .slice(0, 10)
         .map(
-          (session, index) =>
-            `**${index + 1}.** 🟡 <@${session.user_id}>\n` +
-            `└ En pause depuis <t:${unix(session.paused_at)}:R>`
+          (session) =>
+            `🟡 <@${session.user_id}>\n` +
+            `└ ☕ En pause depuis <t:${unix(session.paused_at)}:R>`
         )
         .join("\n\n")
-    : "```Aucun agent actuellement en pause.```";
+    : "Aucun agent actuellement en pause.";
 
-  const medals = ["🥇", "🥈", "🥉", "🏅", "🏅"];
+  const medals = ["🥇", "🥈", "🥉"];
 
   const weeklyLines = weekly.length
     ? weekly
         .map(
           (entry, index) =>
             `${medals[index] || "•"} <@${entry.user_id}>\n` +
-            `└ **${formatDuration(entry.total_seconds)}**`
+            `└ ⏱️ **${formatDuration(entry.total_seconds)}**`
         )
         .join("\n\n")
-    : "```Aucune présence enregistrée cette semaine.```";
+    : "Aucune présence enregistrée cette semaine.";
 
   const totalWeeklySeconds = weekly.reduce(
     (total, entry) =>
@@ -136,17 +136,19 @@ async function buildPanelPayload() {
         inline: false,
       },
       {
-        name: "🏆 CLASSEMENT HEBDOMADAIRE",
+        name: "🏆 TOP 3 HEBDOMADAIRE",
         value: weeklyLines,
         inline: false,
       },
       {
         name: "📊 SYNTHÈSE DU SERVICE",
         value: [
-          `> 👮 **Actifs :** ${working.length}`,
-          `> ☕ **En pause :** ${paused.length}`,
+          `> 👮 **Agents en service :** ${working.length}`,
+          `> ☕ **Agents en pause :** ${paused.length}`,
           `> 📋 **Sessions ouvertes :** ${active.length}`,
-          `> ⏱️ **Top 5 cumulé :** ${formatDuration(totalWeeklySeconds)}`,
+          `> 🏆 **Temps cumulé du Top 3 :** ${formatDuration(
+            totalWeeklySeconds
+          )}`,
         ].join("\n"),
         inline: false,
       }
@@ -221,38 +223,146 @@ async function refreshAttendancePanel(client) {
   });
 }
 
-async function sendAttendanceLog(client, { userId, type, startedAt, endedAt, durationSeconds, moderatorId }) {
-  if (!ATTENDANCE_LOG_CHANNEL_ID) return;
-  const channel = await fetchTextChannel(client, ATTENDANCE_LOG_CHANNEL_ID);
-  if (!channel) return;
-  const settings = {
-    start: { color: 0x2ecc71, title: "🟢 DÉBUT DE SERVICE" },
-    pause: { color: 0xf1c40f, title: "☕ MISE EN PAUSE" },
-    resume: { color: 0x3498db, title: "▶️ REPRISE DE SERVICE" },
-    stop: { color: 0xe74c3c, title: "🔴 FIN DE SERVICE" },
+async function sendAttendanceLog(
+  client,
+  {
+    userId,
+    type,
+    startedAt,
+    endedAt,
+    pausedAt,
+    durationSeconds,
+  }
+) {
+  if (!ATTENDANCE_LOG_CHANNEL_ID) {
+    return;
+  }
+
+  const channel = await fetchTextChannel(
+    client,
+    ATTENDANCE_LOG_CHANNEL_ID
+  );
+
+  if (!channel) {
+    console.warn(
+      "⚠️ Salon des logs de présence inaccessible."
+    );
+    return;
+  }
+
+  const eventConfig = {
+    start: {
+      color: 0x2ecc71,
+      title: "🟢 DÉBUT DE SERVICE",
+      status: "Service démarré",
+    },
+    pause: {
+      color: 0xf1c40f,
+      title: "☕ MISE EN PAUSE",
+      status: "Service mis en pause",
+    },
+    resume: {
+      color: 0x3498db,
+      title: "▶️ REPRISE DE SERVICE",
+      status: "Service repris",
+    },
+    stop: {
+      color: 0xe74c3c,
+      title: "🔴 FIN DE SERVICE",
+      status: "Service terminé",
+    },
   };
-  const current = settings[type] || settings.start;
-  const started = type === "start";
+
+  const current =
+    eventConfig[type] || eventConfig.start;
+
+  const user = await client.users
+    .fetch(userId)
+    .catch(() => null);
+
   const embed = new EmbedBuilder()
     .setColor(current.color)
+    .setAuthor({
+      name: "HARMONY POLICE DEPARTMENT",
+    })
     .setTitle(current.title)
-    .addFields(
-      { name: "👮 Policier", value: `<@${userId}>`, inline: true },
-      { name: "📅 Début", value: `<t:${unix(startedAt)}:F>`, inline: true },
-      ...(type === "stop" ? [
-        { name: "📅 Fin", value: `<t:${unix(endedAt)}:F>`, inline: true },
-        { name: "⏱️ Durée", value: formatDuration(durationSeconds), inline: true },
-      ] : []),
-      ...(type === "pause" && pausedAt ? [
-        { name: "☕ Pause", value: `<t:${unix(pausedAt)}:T>`, inline: true },
-      ] : []),
-      ...(type === "resume" ? [
-        { name: "▶️ Reprise", value: `<t:${Math.floor(Date.now() / 1000)}:T>`, inline: true },
-      ] : []),
-      ...(moderatorId && moderatorId !== userId ? [{ name: "🛡️ Action par", value: `<@${moderatorId}>`, inline: true }] : [])
+    .setDescription(
+      [
+        `👮 <@${userId}>`,
+        "",
+        `**Statut :** ${current.status}`,
+      ].join("\n")
     )
+    .addFields({
+      name: "🕒 Début du service",
+      value: startedAt
+        ? `<t:${unix(startedAt)}:F>`
+        : "Non disponible",
+      inline: true,
+    });
+
+  if (type === "pause") {
+    embed.addFields({
+      name: "☕ Début de la pause",
+      value: pausedAt
+        ? `<t:${unix(pausedAt)}:F>`
+        : `<t:${Math.floor(Date.now() / 1000)}:F>`,
+      inline: true,
+    });
+  }
+
+  if (type === "resume") {
+    embed.addFields({
+      name: "▶️ Reprise du service",
+      value: `<t:${Math.floor(Date.now() / 1000)}:F>`,
+      inline: true,
+    });
+  }
+
+  if (type === "stop") {
+    embed.addFields(
+      {
+        name: "🕒 Fin du service",
+        value: endedAt
+          ? `<t:${unix(endedAt)}:F>`
+          : "Non disponible",
+        inline: true,
+      },
+      {
+        name: "⏱️ Temps comptabilisé",
+        value: formatDuration(durationSeconds),
+        inline: true,
+      }
+    );
+  }
+
+  if (user) {
+    embed.setThumbnail(
+      user.displayAvatarURL({
+        size: 256,
+      })
+    );
+  }
+
+  embed
+    .setFooter({
+      text: "Harmony Police Department • Duty Log",
+    })
     .setTimestamp();
-  await channel.send({ embeds: [embed], allowedMentions: { parse: [] } });
+
+  try {
+    await channel.send({
+      embeds: [embed],
+      allowedMentions: {
+        parse: [],
+      },
+    });
+  } catch (error) {
+    console.error(
+      "❌ Envoi du log de présence impossible :",
+      error?.message || error
+    );
+  }
 }
 
 async function handleAttendanceButton(interaction, client) {
