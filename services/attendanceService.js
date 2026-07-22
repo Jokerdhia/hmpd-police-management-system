@@ -87,7 +87,7 @@ async function buildPanelPayload(client) {
         .map(
           (session) =>
             `🟢 <@${session.user_id}>\n` +
-            `└ ⏱️ En service depuis <t:${unix(session.started_at)}:R>`
+            `└ ⏱️ Depuis <t:${unix(session.started_at)}:R>`
         )
         .join("\n\n")
     : "Aucun agent actuellement en service.";
@@ -107,12 +107,17 @@ async function buildPanelPayload(client) {
 
   const weeklyLines = weekly.length
     ? weekly
+        .filter(
+          (entry) =>
+            Number(entry.total_seconds || 0) > 0
+        )
         .map(
           (entry, index) =>
             `${medals[index] || "•"} <@${entry.user_id}>\n` +
             `└ ⏱️ **${formatDuration(entry.total_seconds)}**`
         )
-        .join("\n\n")
+        .join("\n\n") ||
+      "Aucune présence enregistrée cette semaine."
     : "Aucune présence enregistrée cette semaine.";
 
   const totalWeeklySeconds = weekly.reduce(
@@ -204,65 +209,18 @@ async function buildPanelPayload(client) {
       .setCustomId("attendance:status")
       .setLabel("Mes statistiques")
       .setEmoji("📊")
+      .setStyle(ButtonStyle.Secondary),
+
+    new ButtonBuilder()
+      .setCustomId("attendance:admin")
+      .setLabel("Administration")
+      .setEmoji("🛡️")
       .setStyle(ButtonStyle.Secondary)
   );
 
-  const components = [row];
-
-  if (active.length > 0) {
-    const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId("attendance:force-select")
-      .setPlaceholder("Sélectionner un agent en service")
-      .setMinValues(1)
-      .setMaxValues(1);
-
-    for (const session of active.slice(0, 25)) {
-      const user = await client.users
-        .fetch(session.user_id)
-        .catch(() => null);
-
-      const label = String(
-        user?.globalName ||
-        user?.username ||
-        session.user_id
-      )
-        .replace(/\s+/g, " ")
-        .trim()
-        .slice(0, 90);
-
-      selectMenu.addOptions(
-        new StringSelectMenuOptionBuilder()
-          .setLabel(label)
-          .setDescription(
-            session.paused_at
-              ? "Agent actuellement en pause"
-              : "Agent actuellement en service"
-          )
-          .setValue(session.user_id)
-          .setEmoji(session.paused_at ? "☕" : "🟢")
-      );
-    }
-
-    const selectRow =
-      new ActionRowBuilder().addComponents(
-        selectMenu
-      );
-
-    const confirmRow =
-      new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId("attendance:force-confirm")
-          .setLabel("Forcer la fin du service")
-          .setEmoji("🛑")
-          .setStyle(ButtonStyle.Danger)
-      );
-
-    components.push(selectRow, confirmRow);
-  }
-
   return {
     embeds: [embed],
-    components,
+    components: [row],
     allowedMentions: {
       parse: [],
     },
@@ -456,6 +414,102 @@ async function sendAttendanceLog(
       error?.message || error
     );
   }
+}
+
+async function buildHighCommandPanel(client) {
+  const active = await getActiveAttendances();
+
+  const embed = new EmbedBuilder()
+    .setColor(0x992d22)
+    .setAuthor({
+      name: "HARMONY POLICE DEPARTMENT",
+    })
+    .setTitle("🛡️ Administration des présences")
+    .setDescription(
+      active.length
+        ? [
+            `**${active.length} session(s) actuellement ouverte(s).**`,
+            "",
+            "Sélectionne un agent, puis confirme la fin forcée de son service.",
+          ].join("\n")
+        : "Aucune session active à administrer."
+    )
+    .setFooter({
+      text: "Accès réservé au High Command",
+    })
+    .setTimestamp();
+
+  if (!active.length) {
+    return {
+      embeds: [embed],
+      components: [],
+      allowedMentions: {
+        parse: [],
+      },
+    };
+  }
+
+  const selectMenu = new StringSelectMenuBuilder()
+    .setCustomId("attendance:force-select")
+    .setPlaceholder("Sélectionner un agent en service")
+    .setMinValues(1)
+    .setMaxValues(1);
+
+  for (const session of active.slice(0, 25)) {
+    const user = await client.users
+      .fetch(session.user_id)
+      .catch(() => null);
+
+    const label = String(
+      user?.globalName ||
+      user?.username ||
+      session.user_id
+    )
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 90);
+
+    selectMenu.addOptions(
+      new StringSelectMenuOptionBuilder()
+        .setLabel(label)
+        .setDescription(
+          session.paused_at
+            ? "Agent actuellement en pause"
+            : "Agent actuellement en service"
+        )
+        .setValue(session.user_id)
+        .setEmoji(
+          session.paused_at
+            ? "☕"
+            : "🟢"
+        )
+    );
+  }
+
+  const selectRow =
+    new ActionRowBuilder().addComponents(
+      selectMenu
+    );
+
+  const confirmRow =
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("attendance:force-confirm")
+        .setLabel("Forcer la fin du service")
+        .setEmoji("🛑")
+        .setStyle(ButtonStyle.Danger)
+    );
+
+  return {
+    embeds: [embed],
+    components: [
+      selectRow,
+      confirmRow,
+    ],
+    allowedMentions: {
+      parse: [],
+    },
+  };
 }
 
 async function handleAttendanceSelect(
@@ -749,21 +803,161 @@ async function handleAttendanceButton(interaction, client) {
     return true;
   }
 
+  if (action === "admin") {
+    if (
+      !memberIsHighCommand(
+        interaction.member,
+        interaction
+      )
+    ) {
+      await interaction.editReply(
+        "❌ Cette action est réservée au High Command."
+      );
+      return true;
+    }
+
+    const payload =
+      await buildHighCommandPanel(client);
+
+    await interaction.editReply(payload);
+    return true;
+  }
+
   if (action === "status") {
-    const active = await getActiveAttendance(interaction.user.id);
-    const totals = await getAttendanceTotals("week", 100);
-    const weekly =
-      totals.find((item) => item.user_id === interaction.user.id)
-        ?.total_seconds || 0;
+    const [
+      active,
+      todayTotals,
+      weeklyTotals,
+      monthlyTotals,
+    ] = await Promise.all([
+      getActiveAttendance(
+        interaction.user.id
+      ),
+      getAttendanceTotals("day", 100),
+      getAttendanceTotals("week", 100),
+      getAttendanceTotals("month", 100),
+    ]);
 
-    const status = active
-      ? `🟢 En service depuis <t:${unix(active.started_at)}:R>.`
-      : "🔴 Tu es actuellement hors service.";
+    const findTotal = (list) =>
+      Number(
+        list.find(
+          (item) =>
+            item.user_id ===
+            interaction.user.id
+        )?.total_seconds || 0
+      );
 
-    await interaction.editReply(
-      `${status}
-⏱️ Temps total cette semaine : **${formatDuration(weekly)}**.`
+    const weeklySorted = [
+      ...weeklyTotals,
+    ].sort(
+      (a, b) =>
+        Number(b.total_seconds) -
+        Number(a.total_seconds)
     );
+
+    const rankIndex =
+      weeklySorted.findIndex(
+        (item) =>
+          item.user_id ===
+          interaction.user.id
+      );
+
+    const currentStatus = !active
+      ? "🔴 Hors service"
+      : active.paused_at
+        ? "🟡 En pause"
+        : "🟢 En service";
+
+    const sessionText = active
+      ? active.paused_at
+        ? `Pause depuis <t:${unix(
+            active.paused_at
+          )}:R>`
+        : `Depuis <t:${unix(
+            active.started_at
+          )}:R>`
+      : "Aucune session active";
+
+    const user = await client.users
+      .fetch(interaction.user.id)
+      .catch(() => interaction.user);
+
+    const statsEmbed = new EmbedBuilder()
+      .setColor(
+        active
+          ? active.paused_at
+            ? 0xf1c40f
+            : 0x2ecc71
+          : 0x5865f2
+      )
+      .setAuthor({
+        name: "HARMONY POLICE DEPARTMENT",
+      })
+      .setTitle("📊 Mes statistiques de service")
+      .setThumbnail(
+        user.displayAvatarURL({
+          size: 256,
+        })
+      )
+      .addFields(
+        {
+          name: "👮 Policier",
+          value: `<@${interaction.user.id}>`,
+          inline: true,
+        },
+        {
+          name: "📡 Statut",
+          value: currentStatus,
+          inline: true,
+        },
+        {
+          name: "⏱️ Session actuelle",
+          value: sessionText,
+          inline: false,
+        },
+        {
+          name: "📅 Aujourd'hui",
+          value: formatDuration(
+            findTotal(todayTotals)
+          ),
+          inline: true,
+        },
+        {
+          name: "📆 Cette semaine",
+          value: formatDuration(
+            findTotal(weeklyTotals)
+          ),
+          inline: true,
+        },
+        {
+          name: "🗓️ Ce mois",
+          value: formatDuration(
+            findTotal(monthlyTotals)
+          ),
+          inline: true,
+        },
+        {
+          name: "🏆 Classement hebdomadaire",
+          value:
+            rankIndex >= 0
+              ? `#${rankIndex + 1} sur ${weeklySorted.length}`
+              : "Non classé",
+          inline: false,
+        }
+      )
+      .setFooter({
+        text: "Harmony Police Department • Statistiques personnelles",
+      })
+      .setTimestamp();
+
+    await interaction.editReply({
+      embeds: [statsEmbed],
+      components: [],
+      allowedMentions: {
+        parse: [],
+      },
+    });
+
     return true;
   }
 
