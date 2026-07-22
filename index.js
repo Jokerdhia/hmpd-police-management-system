@@ -448,15 +448,14 @@ async function sendDemotionLog({
   newGrade,
   points,
 }) {
-  const graduationChannel =
-    await fetchTextChannel(
-      guild,
-      PROMOTION_CHANNEL_ID
-    );
+  const graduationChannel = await fetchTextChannel(
+    guild,
+    PROMOTION_CHANNEL_ID
+  );
 
   if (!graduationChannel) {
     console.error(
-      "❌ Salon des promotions et rétrogradations introuvable."
+      "❌ Salon Graduation introuvable pour la rétrogradation."
     );
     return;
   }
@@ -478,17 +477,17 @@ async function sendDemotionLog({
       {
         name: "⬇️ Ancien grade",
         value: oldGrade.name,
-        inline: false,
+        inline: true,
       },
       {
         name: "🎖️ Nouveau grade",
         value: newGrade.name,
-        inline: false,
+        inline: true,
       },
       {
         name: "⭐ Total des points",
-        value: `${points}`,
-        inline: false,
+        value: String(points),
+        inline: true,
       }
     )
     .setFooter({

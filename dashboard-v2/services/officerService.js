@@ -427,6 +427,44 @@ async function sendPromotionMessage({
   );
 }
 
+async function sendDemotionMessage({
+  userId,
+  oldGrade,
+  newGrade,
+  newPoints,
+}) {
+  if (!PROMOTION_CHANNEL_ID) {
+    return;
+  }
+
+  await sendChannelMessage(
+    PROMOTION_CHANNEL_ID,
+    {
+      content: `🔻 Rétrogradation de <@${userId}>`,
+
+      embeds: [
+        {
+          color: 0xe74c3c,
+          title: "🔻 RÉTROGRADATION OFFICIELLE",
+
+          description:
+            `👤 **Agent :** <@${userId}>\n\n` +
+            `⬇️ **Ancien grade :** ${oldGrade.name}\n\n` +
+            `🎖️ **Nouveau grade :** ${newGrade.name}\n\n` +
+            `⭐ **Total des points :** ${newPoints}`,
+
+          timestamp: new Date().toISOString(),
+        },
+      ],
+
+      allowed_mentions: {
+        users: [userId],
+        parse: [],
+      },
+    }
+  );
+}
+
 /*
 |--------------------------------------------------------------------------
 | Modification des points
@@ -585,9 +623,17 @@ async function modifyOfficerPoints({
     );
   });
 
-  const isPromotion =
-    getGradeIndex(newGrade.name) >
+  const oldGradeIndex =
     getGradeIndex(oldGrade.name);
+
+  const newGradeIndex =
+    getGradeIndex(newGrade.name);
+
+  const isPromotion =
+    newGradeIndex > oldGradeIndex;
+
+  const isDemotion =
+    newGradeIndex < oldGradeIndex;
 
   if (isPromotion) {
     await sendPromotionMessage({
@@ -603,6 +649,20 @@ async function modifyOfficerPoints({
     });
   }
 
+  if (isDemotion) {
+    await sendDemotionMessage({
+      userId: safeUserId,
+      oldGrade,
+      newGrade,
+      newPoints: result.newPoints,
+    }).catch((error) => {
+      console.error(
+        "❌ Impossible d'envoyer le message de rétrogradation :",
+        error?.message || error
+      );
+    });
+  }
+
   return {
     result,
     officer:
@@ -610,6 +670,7 @@ async function modifyOfficerPoints({
     oldGrade,
     newGrade,
     promoted: isPromotion,
+    demoted: isDemotion,
   };
 }
 
