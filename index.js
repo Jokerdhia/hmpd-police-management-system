@@ -13,6 +13,7 @@ const {
   ensureAttendancePanel,
   refreshAttendancePanel,
   handleAttendanceButton,
+  handleAttendanceSelect,
 } = require("./services/attendanceService");
 
 const {
@@ -821,6 +822,45 @@ client.once(Events.ClientReady, async () => {
 */
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isStringSelectMenu()) {
+    try {
+      const handled =
+        await handleAttendanceSelect(
+          interaction
+        );
+
+      if (handled) {
+        return;
+      }
+    } catch (error) {
+      console.error(
+        "❌ Erreur menu de présence :",
+        error
+      );
+
+      const payload = {
+        content:
+          "❌ Impossible de traiter cette sélection.",
+        flags: MessageFlags.Ephemeral,
+      };
+
+      if (
+        interaction.deferred ||
+        interaction.replied
+      ) {
+        await interaction
+          .editReply(payload)
+          .catch(() => {});
+      } else {
+        await interaction
+          .reply(payload)
+          .catch(() => {});
+      }
+
+      return;
+    }
+  }
+
   if (interaction.isButton()) {
     try {
       const handled = await handleAttendanceButton(interaction, client);

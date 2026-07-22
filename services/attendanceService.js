@@ -5,6 +5,8 @@ const {
   ButtonStyle,
   MessageFlags,
   PermissionFlagsBits,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
 } = require("discord.js");
 
 const {
@@ -27,6 +29,7 @@ const ROLE_HIGH_COMMAND = String(
 ).trim();
 
 const PANEL_SETTING_KEY = "attendance_panel_message_id";
+const forceSelectionByModerator = new Map();
 
 function formatDuration(totalSeconds) {
   const seconds = Math.max(0, Number(totalSeconds) || 0);
@@ -204,48 +207,62 @@ async function buildPanelPayload(client) {
       .setStyle(ButtonStyle.Secondary)
   );
 
-  const forceButtons = [];
+  const components = [row];
 
-  for (const session of active.slice(0, 20)) {
-    const user = await client.users
-      .fetch(session.user_id)
-      .catch(() => null);
+  if (active.length > 0) {
+    const selectMenu = new StringSelectMenuBuilder()
+      .setCustomId("attendance:force-select")
+      .setPlaceholder("Sélectionner un agent en service")
+      .setMinValues(1)
+      .setMaxValues(1);
 
-    const label = String(
-      user?.globalName ||
-      user?.username ||
-      session.user_id
-    )
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 55);
+    for (const session of active.slice(0, 25)) {
+      const user = await client.users
+        .fetch(session.user_id)
+        .catch(() => null);
 
-    forceButtons.push(
-      new ButtonBuilder()
-        .setCustomId(`attendance:force:${session.user_id}`)
-        .setLabel(`Forcer fin • ${label}`)
-        .setEmoji("🛑")
-        .setStyle(ButtonStyle.Secondary)
-    );
-  }
-
-  const forceRows = [];
-
-  for (
-    let index = 0;
-    index < forceButtons.length;
-    index += 5
-  ) {
-    forceRows.push(
-      new ActionRowBuilder().addComponents(
-        forceButtons.slice(index, index + 5)
+      const label = String(
+        user?.globalName ||
+        user?.username ||
+        session.user_id
       )
-    );
+        .replace(/\s+/g, " ")
+        .trim()
+        .slice(0, 90);
+
+      selectMenu.addOptions(
+        new StringSelectMenuOptionBuilder()
+          .setLabel(label)
+          .setDescription(
+            session.paused_at
+              ? "Agent actuellement en pause"
+              : "Agent actuellement en service"
+          )
+          .setValue(session.user_id)
+          .setEmoji(session.paused_at ? "☕" : "🟢")
+      );
+    }
+
+    const selectRow =
+      new ActionRowBuilder().addComponents(
+        selectMenu
+      );
+
+    const confirmRow =
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("attendance:force-confirm")
+          .setLabel("Forcer la fin du service")
+          .setEmoji("🛑")
+          .setStyle(ButtonStyle.Danger)
+      );
+
+    components.push(selectRow, confirmRow);
   }
 
   return {
     embeds: [embed],
-    components: [row, ...forceRows],
+    components,
     allowedMentions: {
       parse: [],
     },
@@ -441,6 +458,60 @@ async function sendAttendanceLog(
   }
 }
 
+async function handleAttendanceSelect(
+  interaction
+) {
+  if (
+    !interaction.isStringSelectMenu() ||
+    interaction.customId !==
+      "attendance:force-select"
+  ) {
+    return false;
+  }
+
+  await interaction.deferReply({
+    flags: MessageFlags.Ephemeral,
+  });
+
+  if (
+    !memberIsHighCommand(
+      interaction.member,
+      interaction
+    )
+  ) {
+    await interaction.editReply(
+      "❌ Cette action est réservée au High Command."
+    );
+    return true;
+  }
+
+  const targetUserId = String(
+    interaction.values?.[0] || ""
+  ).trim();
+
+  if (!/^\d{16,22}$/.test(targetUserId)) {
+    await interaction.editReply(
+      "❌ Identifiant du policier invalide."
+    );
+    return true;
+  }
+
+  forceSelectionByModerator.set(
+    interaction.user.id,
+    {
+      targetUserId,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    }
+  );
+
+  await interaction.editReply(
+    `✅ <@${targetUserId}> sélectionné.\n` +
+    "Clique maintenant sur **Forcer la fin du service**."
+  );
+
+  return true;
+}
+
 async function handleAttendanceButton(interaction, client) {
   if (!interaction.customId?.startsWith("attendance:")) return false;
 
@@ -467,7 +538,7 @@ async function handleAttendanceButton(interaction, client) {
   const customIdParts = interaction.customId.split(":");
   const action = customIdParts[1];
 
-  if (action === "force") {
+  if (action === "force-confirm") {
     if (
       !memberIsHighCommand(
         interaction.member,
@@ -480,16 +551,31 @@ async function handleAttendanceButton(interaction, client) {
       return true;
     }
 
-    const targetUserId = String(
-      customIdParts[2] || ""
-    ).trim();
+    const selection =
+      forceSelectionByModerator.get(
+        interaction.user.id
+      );
 
-    if (!/^\d{16,22}$/.test(targetUserId)) {
+    if (
+      !selection ||
+      selection.expiresAt < Date.now()
+    ) {
+      forceSelectionByModerator.delete(
+        interaction.user.id
+      );
+
       await interaction.editReply(
-        "❌ Identifiant du policier invalide."
+        "⚠️ Sélectionne d'abord un agent dans le menu."
       );
       return true;
     }
+
+    const targetUserId =
+      selection.targetUserId;
+
+    forceSelectionByModerator.delete(
+      interaction.user.id
+    );
 
     const result = await stopAttendance(
       targetUserId,
@@ -513,24 +599,31 @@ async function handleAttendanceButton(interaction, client) {
       )}**.`
     );
 
-    const forceResults = await Promise.allSettled([
-      sendAttendanceLog(client, {
-        userId: targetUserId,
-        type: "force",
-        startedAt: result.session.started_at,
-        endedAt: result.session.ended_at,
-        durationSeconds:
-          result.session.duration_seconds,
-        moderatorId: interaction.user.id,
-      }),
-      refreshAttendancePanel(client),
-    ]);
+    const forceResults =
+      await Promise.allSettled([
+        sendAttendanceLog(client, {
+          userId: targetUserId,
+          type: "force",
+          startedAt:
+            result.session.started_at,
+          endedAt:
+            result.session.ended_at,
+          durationSeconds:
+            result.session.duration_seconds,
+          moderatorId:
+            interaction.user.id,
+        }),
+        refreshAttendancePanel(client),
+      ]);
 
     for (const resultItem of forceResults) {
-      if (resultItem.status === "rejected") {
+      if (
+        resultItem.status === "rejected"
+      ) {
         console.error(
           "❌ Erreur après fin de service forcée :",
-          resultItem.reason?.message || resultItem.reason
+          resultItem.reason?.message ||
+            resultItem.reason
         );
       }
     }
@@ -684,5 +777,6 @@ module.exports = {
   ensureAttendancePanel,
   refreshAttendancePanel,
   handleAttendanceButton,
+  handleAttendanceSelect,
   formatDuration,
 };
