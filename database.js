@@ -42,6 +42,31 @@ const ready = (async () => {
     CREATE INDEX IF NOT EXISTS idx_points_history_user_id ON points_history(user_id);
     CREATE INDEX IF NOT EXISTS idx_points_history_created_at ON points_history(created_at);
     CREATE INDEX IF NOT EXISTS idx_officers_points ON officers(points);
+
+    CREATE TABLE IF NOT EXISTS attendance_sessions (
+      id BIGSERIAL PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      started_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      ended_at TIMESTAMPTZ,
+      duration_seconds INTEGER,
+      started_by TEXT NOT NULL,
+      ended_by TEXT,
+      end_reason TEXT,
+      CHECK (duration_seconds IS NULL OR duration_seconds >= 0)
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_attendance_one_active_per_user
+      ON attendance_sessions(user_id) WHERE ended_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_attendance_user_started
+      ON attendance_sessions(user_id, started_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_attendance_active
+      ON attendance_sessions(started_at) WHERE ended_at IS NULL;
+
+    CREATE TABLE IF NOT EXISTS bot_settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
   `);
   const { rows } = await pool.query("SELECT COUNT(*)::int AS total FROM officers");
   console.log("✅ Neon PostgreSQL connecté.");
@@ -184,9 +209,121 @@ async function countOfficers() {
   const { rows } = await pool.query("SELECT COUNT(*)::int AS total FROM officers");
   return Number(rows[0]?.total || 0);
 }
+async function startAttendance(userId, startedBy = userId) {
+  await ready;
+  const safeUserId = normalizeUserId(userId);
+  const safeStartedBy = normalizeModeratorId(startedBy);
+  try {
+    const { rows } = await pool.query(
+      `INSERT INTO attendance_sessions (user_id, started_by)
+       VALUES ($1, $2)
+       RETURNING id, user_id, started_at, ended_at, duration_seconds`,
+      [safeUserId, safeStartedBy]
+    );
+    return { started: true, session: rows[0] };
+  } catch (error) {
+    if (error?.code === "23505") {
+      const current = await getActiveAttendance(safeUserId);
+      return { started: false, reason: "already_active", session: current };
+    }
+    throw error;
+  }
+}
+
+async function stopAttendance(userId, endedBy = userId, endReason = "manual") {
+  await ready;
+  const safeUserId = normalizeUserId(userId);
+  const safeEndedBy = normalizeModeratorId(endedBy);
+  const safeReason = String(endReason || "manual").trim().slice(0, 200) || "manual";
+  const { rows } = await pool.query(
+    `UPDATE attendance_sessions
+     SET ended_at = CURRENT_TIMESTAMP,
+         duration_seconds = GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at)))::int),
+         ended_by = $2,
+         end_reason = $3
+     WHERE id = (
+       SELECT id FROM attendance_sessions
+       WHERE user_id = $1 AND ended_at IS NULL
+       ORDER BY started_at DESC
+       LIMIT 1
+     )
+     RETURNING id, user_id, started_at, ended_at, duration_seconds, started_by, ended_by, end_reason`,
+    [safeUserId, safeEndedBy, safeReason]
+  );
+  return rows[0] ? { stopped: true, session: rows[0] } : { stopped: false, reason: "not_active" };
+}
+
+async function getActiveAttendance(userId) {
+  await ready;
+  const { rows } = await pool.query(
+    `SELECT id, user_id, started_at, ended_at, duration_seconds, started_by
+     FROM attendance_sessions
+     WHERE user_id = $1 AND ended_at IS NULL
+     ORDER BY started_at DESC LIMIT 1`,
+    [normalizeUserId(userId)]
+  );
+  return rows[0] || null;
+}
+
+async function getActiveAttendances() {
+  await ready;
+  const { rows } = await pool.query(
+    `SELECT id, user_id, started_at, started_by
+     FROM attendance_sessions
+     WHERE ended_at IS NULL
+     ORDER BY started_at ASC`
+  );
+  return rows;
+}
+
+async function getAttendanceTotals(period = "week", limit = 25) {
+  await ready;
+  const allowed = { day: "day", week: "week", month: "month" };
+  const unit = allowed[period] || "week";
+  const { rows } = await pool.query(
+    `SELECT user_id,
+       SUM(
+         CASE WHEN ended_at IS NULL
+           THEN GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP - started_at)))::int)
+           ELSE COALESCE(duration_seconds, 0)
+         END
+       )::bigint AS total_seconds
+     FROM attendance_sessions
+     WHERE started_at >= date_trunc($1, CURRENT_TIMESTAMP)
+     GROUP BY user_id
+     ORDER BY total_seconds DESC
+     LIMIT $2`,
+    [unit, normalizeLimit(limit, 25, 100)]
+  );
+  return rows.map(r => ({...r, total_seconds: Number(r.total_seconds || 0)}));
+}
+
+async function setBotSetting(key, value) {
+  await ready;
+  const safeKey = String(key || "").trim();
+  if (!safeKey || safeKey.length > 100) throw new Error("Clé de paramètre invalide.");
+  const safeValue = String(value || "").trim();
+  await pool.query(
+    `INSERT INTO bot_settings (key, value) VALUES ($1, $2)
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = CURRENT_TIMESTAMP`,
+    [safeKey, safeValue]
+  );
+}
+
+async function getBotSetting(key) {
+  await ready;
+  const { rows } = await pool.query(`SELECT value FROM bot_settings WHERE key=$1`, [String(key || "").trim()]);
+  return rows[0]?.value || null;
+}
+
 async function closeDatabase() {
   await pool.end();
   console.log("✅ Connexion Neon PostgreSQL fermée.");
 }
 
-module.exports = { ready, getOfficer, updateOfficer, changeOfficerPoints, addPointsHistory, getOfficerHistory, getLeaderboard, getAllOfficers, countOfficers, closeDatabase };
+module.exports = {
+  ready, getOfficer, updateOfficer, changeOfficerPoints, addPointsHistory,
+  getOfficerHistory, getLeaderboard, getAllOfficers, countOfficers,
+  startAttendance, stopAttendance, getActiveAttendance, getActiveAttendances,
+  getAttendanceTotals, setBotSetting, getBotSetting, closeDatabase
+};

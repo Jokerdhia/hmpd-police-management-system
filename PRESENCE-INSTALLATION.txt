@@ -1,0 +1,24 @@
+SYSTÈME DE PRÉSENCE HMPD
+
+Ajoute dans Render > Environment :
+
+ATTENDANCE_CHANNEL_ID=ID_DU_SALON_PRESENCE
+ATTENDANCE_LOG_CHANNEL_ID=ID_DU_SALON_LOGS_PRESENCE
+
+ROLE_POLICE doit déjà contenir le rôle principal Police.
+
+Après le déploiement, lance une fois :
+node deploy-commands.js
+
+Puis dans Discord :
+/presencepanel
+
+Fonctions :
+- bouton Prendre son service
+- bouton Finir son service
+- bouton Mon temps
+- panneau actualisé automatiquement
+- classement hebdomadaire
+- logs début/fin de service
+- stockage permanent dans Neon PostgreSQL
+- protection contre deux services actifs pour le même policier

@@ -136,6 +136,11 @@ const commands = [
         .setMaxValue(25)
     ),
 
+
+  new SlashCommandBuilder()
+    .setName("presencepanel")
+    .setDescription("Créer ou actualiser le panneau de présence HMPD"),
+
   new SlashCommandBuilder()
     .setName("syncgrade")
     .setDescription(
@@ -183,6 +188,7 @@ async function deployCommands() {
     console.log("• /classement");
     console.log("• /historique");
     console.log("• /syncgrade");
+    console.log("• /presencepanel");
     console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   } catch (error) {
     console.error("❌ Impossible d'installer les commandes.");

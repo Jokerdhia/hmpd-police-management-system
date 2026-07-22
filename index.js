@@ -10,6 +10,12 @@ const {
 } = require("discord.js");
 
 const {
+  ensureAttendancePanel,
+  refreshAttendancePanel,
+  handleAttendanceButton,
+} = require("./services/attendanceService");
+
+const {
   getOfficer,
   updateOfficer,
   changeOfficerPoints,
@@ -782,6 +788,17 @@ client.once(Events.ClientReady, async () => {
   console.log(`📊 Policiers enregistrés : ${await countOfficers()}`);
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
+  try {
+    await ensureAttendancePanel(client);
+    console.log("✅ Panneau de présence actif.");
+  } catch (error) {
+    console.error("❌ Panneau de présence non initialisé :", error?.message || error);
+  }
+
+  setInterval(() => {
+    void refreshAttendancePanel(client);
+  }, 60000).unref?.();
+
   for (const guild of client.guilds.cache.values()) {
     try {
       await verifyConfiguredRoles(guild);
@@ -804,6 +821,19 @@ client.once(Events.ClientReady, async () => {
 */
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isButton()) {
+    try {
+      const handled = await handleAttendanceButton(interaction, client);
+      if (handled) return;
+    } catch (error) {
+      console.error("❌ Erreur bouton de présence :", error);
+      const payload = { content: "❌ Impossible de traiter la présence pour le moment.", ephemeral: true };
+      if (interaction.deferred || interaction.replied) await interaction.editReply(payload).catch(() => {});
+      else await interaction.reply(payload).catch(() => {});
+      return;
+    }
+  }
+
   if (!interaction.isChatInputCommand()) {
     return;
   }
@@ -1069,6 +1099,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
         },
       });
 
+      return;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | /presencepanel
+    |--------------------------------------------------------------------------
+    */
+
+    if (interaction.commandName === "presencepanel") {
+      if (!isHighCommand(interaction)) {
+        await interaction.reply(privateReply("❌ Cette commande est réservée au High Command."));
+        return;
+      }
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      await ensureAttendancePanel(client, false);
+      await interaction.editReply("✅ Le panneau de présence a été créé ou actualisé.");
       return;
     }
 
