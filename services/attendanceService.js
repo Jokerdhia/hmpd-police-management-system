@@ -291,6 +291,7 @@ async function sendAttendanceLog(
     endedAt,
     pausedAt,
     durationSeconds,
+    moderatorId,
   }
 ) {
   if (!ATTENDANCE_LOG_CHANNEL_ID) {
@@ -512,7 +513,7 @@ async function handleAttendanceButton(interaction, client) {
       )}**.`
     );
 
-    await Promise.allSettled([
+    const forceResults = await Promise.allSettled([
       sendAttendanceLog(client, {
         userId: targetUserId,
         type: "force",
@@ -524,6 +525,15 @@ async function handleAttendanceButton(interaction, client) {
       }),
       refreshAttendancePanel(client),
     ]);
+
+    for (const resultItem of forceResults) {
+      if (resultItem.status === "rejected") {
+        console.error(
+          "❌ Erreur après fin de service forcée :",
+          resultItem.reason?.message || resultItem.reason
+        );
+      }
+    }
 
     return true;
   }
