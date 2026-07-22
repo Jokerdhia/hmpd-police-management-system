@@ -264,8 +264,9 @@ async function sendAttendanceLog(
     type,
     startedAt,
     endedAt,
-    pausedAt,
     durationSeconds,
+    pausedSeconds = 0,
+    pauseCount = 0,
     moderatorId,
   }
 ) {
@@ -285,107 +286,66 @@ async function sendAttendanceLog(
     return;
   }
 
-  const eventConfig = {
-    start: {
-      color: 0x2ecc71,
-      title: "🟢 DÉBUT DE SERVICE",
-      status: "Service démarré",
-    },
-    pause: {
-      color: 0xf1c40f,
-      title: "☕ MISE EN PAUSE",
-      status: "Service mis en pause",
-    },
-    resume: {
-      color: 0x3498db,
-      title: "▶️ REPRISE DE SERVICE",
-      status: "Service repris",
-    },
-    stop: {
-      color: 0xe74c3c,
-      title: "🔴 FIN DE SERVICE",
-      status: "Service terminé",
-    },
-    force: {
-      color: 0x992d22,
-      title: "🛑 FIN DE SERVICE FORCÉE",
-      status: "Service terminé par le High Command",
-    },
-  };
-
-  const current =
-    eventConfig[type] || eventConfig.start;
-
+  const forced = type === "force";
   const user = await client.users
     .fetch(userId)
     .catch(() => null);
 
   const embed = new EmbedBuilder()
-    .setColor(current.color)
+    .setColor(forced ? 0x992d22 : 0xe74c3c)
     .setAuthor({
       name: "HARMONY POLICE DEPARTMENT",
     })
-    .setTitle(current.title)
-    .setDescription(
-      [
-        `👮 <@${userId}>`,
-        "",
-        `**Statut :** ${current.status}`,
-      ].join("\n")
+    .setTitle(
+      forced
+        ? "🛑 RAPPORT DE SERVICE — FIN FORCÉE"
+        : "📋 RAPPORT DE SERVICE"
     )
-    .addFields({
-      name: "🕒 Début du service",
-      value: startedAt
-        ? `<t:${unix(startedAt)}:F>`
-        : "Non disponible",
-      inline: true,
-    });
-
-  if (type === "pause") {
-    embed.addFields({
-      name: "☕ Début de la pause",
-      value: pausedAt
-        ? `<t:${unix(pausedAt)}:F>`
-        : `<t:${Math.floor(Date.now() / 1000)}:F>`,
-      inline: true,
-    });
-  }
-
-  if (type === "resume") {
-    embed.addFields({
-      name: "▶️ Reprise du service",
-      value: `<t:${Math.floor(Date.now() / 1000)}:F>`,
-      inline: true,
-    });
-  }
-
-  if (type === "stop" || type === "force") {
-    embed.addFields(
+    .setDescription(`👮 <@${userId}>`)
+    .addFields(
       {
-        name: "🕒 Fin du service",
+        name: "🟢 Début du service",
+        value: startedAt
+          ? `<t:${unix(startedAt)}:F>`
+          : "Non disponible",
+        inline: true,
+      },
+      {
+        name: "🔴 Fin du service",
         value: endedAt
           ? `<t:${unix(endedAt)}:F>`
           : "Non disponible",
         inline: true,
       },
       {
-        name: "⏱️ Temps comptabilisé",
+        name: "⏱️ Temps travaillé",
         value: formatDuration(durationSeconds),
         inline: true,
+      },
+      {
+        name: "☕ Nombre de pauses",
+        value: String(Number(pauseCount) || 0),
+        inline: true,
+      },
+      {
+        name: "☕ Temps total en pause",
+        value: formatDuration(pausedSeconds),
+        inline: true,
+      },
+      {
+        name: forced
+          ? "🛡️ Fin forcée par"
+          : "👤 Fin de service par",
+        value: moderatorId
+          ? `<@${moderatorId}>`
+          : `<@${userId}>`,
+        inline: true,
       }
-    );
-  }
-
-  if (
-    type === "force" &&
-    moderatorId
-  ) {
-    embed.addFields({
-      name: "🛡️ Action effectuée par",
-      value: `<@${moderatorId}>`,
-      inline: true,
-    });
-  }
+    )
+    .setFooter({
+      text: "Harmony Police Department • Duty Report",
+    })
+    .setTimestamp();
 
   if (user) {
     embed.setThumbnail(
@@ -394,12 +354,6 @@ async function sendAttendanceLog(
       })
     );
   }
-
-  embed
-    .setFooter({
-      text: "Harmony Police Department • Duty Log",
-    })
-    .setTimestamp();
 
   try {
     await channel.send({
@@ -410,7 +364,7 @@ async function sendAttendanceLog(
     });
   } catch (error) {
     console.error(
-      "❌ Envoi du log de présence impossible :",
+      "❌ Envoi du rapport de service impossible :",
       error?.message || error
     );
   }
@@ -664,6 +618,10 @@ async function handleAttendanceButton(interaction, client) {
             result.session.ended_at,
           durationSeconds:
             result.session.duration_seconds,
+          pausedSeconds:
+            result.session.paused_seconds,
+          pauseCount:
+            result.session.pause_count,
           moderatorId:
             interaction.user.id,
         }),
@@ -698,13 +656,6 @@ async function handleAttendanceButton(interaction, client) {
       return true;
     }
 
-    await sendAttendanceLog(client, {
-      userId: interaction.user.id,
-      type: "start",
-      startedAt: result.session.started_at,
-      moderatorId: interaction.user.id,
-    });
-
     await refreshAttendancePanel(client);
 
     await interaction.editReply(
@@ -734,15 +685,7 @@ async function handleAttendanceButton(interaction, client) {
       );
 
       if (result.resumed) {
-        await Promise.allSettled([
-          sendAttendanceLog(client, {
-            userId: interaction.user.id,
-            type: "resume",
-            startedAt: result.session.started_at,
-            moderatorId: interaction.user.id,
-          }),
-          refreshAttendancePanel(client),
-        ]);
+        await refreshAttendancePanel(client);
       }
 
       return true;
@@ -757,16 +700,7 @@ async function handleAttendanceButton(interaction, client) {
     );
 
     if (result.paused) {
-      await Promise.allSettled([
-        sendAttendanceLog(client, {
-          userId: interaction.user.id,
-          type: "pause",
-          startedAt: result.session.started_at,
-          pausedAt: result.session.paused_at,
-          moderatorId: interaction.user.id,
-        }),
-        refreshAttendancePanel(client),
-      ]);
+      await refreshAttendancePanel(client);
     }
 
     return true;
@@ -792,6 +726,8 @@ async function handleAttendanceButton(interaction, client) {
       startedAt: result.session.started_at,
       endedAt: result.session.ended_at,
       durationSeconds: result.session.duration_seconds,
+      pausedSeconds: result.session.paused_seconds,
+      pauseCount: result.session.pause_count,
       moderatorId: interaction.user.id,
     });
 

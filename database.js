@@ -51,6 +51,7 @@ const ready = (async () => {
       duration_seconds INTEGER,
       paused_at TIMESTAMPTZ,
       paused_seconds INTEGER NOT NULL DEFAULT 0,
+      pause_count INTEGER NOT NULL DEFAULT 0,
       started_by TEXT NOT NULL,
       ended_by TEXT,
       end_reason TEXT,
@@ -75,6 +76,9 @@ const ready = (async () => {
 
     ALTER TABLE attendance_sessions
       ADD COLUMN IF NOT EXISTS paused_seconds INTEGER NOT NULL DEFAULT 0;
+
+    ALTER TABLE attendance_sessions
+      ADD COLUMN IF NOT EXISTS pause_count INTEGER NOT NULL DEFAULT 0;
   `);
   const { rows } = await pool.query("SELECT COUNT(*)::int AS total FROM officers");
   console.log("✅ Neon PostgreSQL connecté.");
@@ -228,9 +232,10 @@ async function startAttendance(userId, startedBy = userId) {
          user_id,
          started_by,
          paused_at,
-         paused_seconds
+         paused_seconds,
+         pause_count
        )
-       VALUES ($1, $2, NULL, 0)
+       VALUES ($1, $2, NULL, 0, 0)
        RETURNING
          id,
          user_id,
@@ -238,7 +243,8 @@ async function startAttendance(userId, startedBy = userId) {
          ended_at,
          duration_seconds,
          paused_at,
-         paused_seconds`,
+         paused_seconds,
+         pause_count`,
       [safeUserId, safeStartedBy]
     );
 
@@ -263,7 +269,8 @@ async function pauseAttendance(userId) {
 
   const { rows } = await pool.query(
     `UPDATE attendance_sessions
-     SET paused_at = CURRENT_TIMESTAMP
+     SET paused_at = CURRENT_TIMESTAMP,
+         pause_count = COALESCE(pause_count, 0) + 1
      WHERE id = (
        SELECT id
        FROM attendance_sessions
@@ -278,7 +285,8 @@ async function pauseAttendance(userId) {
        user_id,
        started_at,
        paused_at,
-       paused_seconds`,
+       paused_seconds,
+       pause_count`,
     [safeUserId]
   );
 
@@ -322,7 +330,8 @@ async function resumeAttendance(userId) {
        user_id,
        started_at,
        paused_at,
-       paused_seconds`,
+       paused_seconds,
+       pause_count`,
     [safeUserId]
   );
 
@@ -396,6 +405,7 @@ async function stopAttendance(
        duration_seconds,
        paused_at,
        paused_seconds,
+       pause_count,
        started_by,
        ended_by,
        end_reason`,
@@ -419,6 +429,7 @@ async function getActiveAttendance(userId) {
        duration_seconds,
        paused_at,
        COALESCE(paused_seconds, 0) AS paused_seconds,
+       COALESCE(pause_count, 0) AS pause_count,
        started_by
      FROM attendance_sessions
      WHERE user_id = $1
@@ -441,6 +452,7 @@ async function getActiveAttendances() {
        started_at,
        paused_at,
        COALESCE(paused_seconds, 0) AS paused_seconds,
+       COALESCE(pause_count, 0) AS pause_count,
        started_by
      FROM attendance_sessions
      WHERE ended_at IS NULL
