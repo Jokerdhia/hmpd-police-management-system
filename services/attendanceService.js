@@ -48,30 +48,112 @@ async function fetchTextChannel(client, channelId) {
 
 async function buildPanelPayload() {
   const active = await getActiveAttendances();
-  const weekly = await getAttendanceTotals("week", 10);
+  const weekly = await getAttendanceTotals("week", 5);
 
-  const activeLines = active.length
-    ? active.slice(0, 25).map((session, index) =>
-        `${index + 1}. <@${session.user_id}> — depuis <t:${unix(session.started_at)}:R>`
-      ).join("\n")
-    : "Aucun policier actuellement en service.";
+  const working = active.filter(
+    (session) => !session.paused_at
+  );
+
+  const paused = active.filter(
+    (session) => Boolean(session.paused_at)
+  );
+
+  const workingLines = working.length
+    ? working
+        .slice(0, 15)
+        .map(
+          (session, index) =>
+            `**${index + 1}.** 🟢 <@${session.user_id}>\n` +
+            `└ En service depuis <t:${unix(session.started_at)}:R>`
+        )
+        .join("\n\n")
+    : "```Aucun agent actuellement en service.```";
+
+  const pausedLines = paused.length
+    ? paused
+        .slice(0, 10)
+        .map(
+          (session, index) =>
+            `**${index + 1}.** 🟡 <@${session.user_id}>\n` +
+            `└ En pause depuis <t:${unix(session.paused_at)}:R>`
+        )
+        .join("\n\n")
+    : "```Aucun agent actuellement en pause.```";
+
+  const medals = ["🥇", "🥈", "🥉", "🏅", "🏅"];
 
   const weeklyLines = weekly.length
-    ? weekly.map((entry, index) =>
-        `${["🥇", "🥈", "🥉"][index] || `${index + 1}.`} <@${entry.user_id}> — **${formatDuration(entry.total_seconds)}**`
-      ).join("\n")
-    : "Aucune présence enregistrée cette semaine.";
+    ? weekly
+        .map(
+          (entry, index) =>
+            `${medals[index] || "•"} <@${entry.user_id}>\n` +
+            `└ **${formatDuration(entry.total_seconds)}**`
+        )
+        .join("\n\n")
+    : "```Aucune présence enregistrée cette semaine.```";
+
+  const totalWeeklySeconds = weekly.reduce(
+    (total, entry) =>
+      total + Number(entry.total_seconds || 0),
+    0
+  );
+
+  const departmentStatus =
+    working.length > 0
+      ? "🟢 Département opérationnel"
+      : paused.length > 0
+        ? "🟡 Service temporairement en pause"
+        : "⚫ Aucun agent en service";
 
   const embed = new EmbedBuilder()
-    .setColor(active.length ? 0x2ecc71 : 0x95a5a6)
-    .setTitle("🚔 HARMONY POLICE DEPARTMENT")
-    .setAuthor({ name: "Duty Management System" })
-    .addFields(
-      { name: `🟢 AGENTS EN SERVICE • ${active.filter((session) => !session.paused_at).length}`, value: active.filter((session) => !session.paused_at).length ? active.filter((session) => !session.paused_at).map((session) => `🟢 <@${session.user_id}>\n└ ⏱️ En service depuis <t:${unix(session.started_at)}:R>`).join("\n\n") : "Aucun agent actuellement en service." },
-      { name: `🟡 AGENTS EN PAUSE • ${active.filter((session) => session.paused_at).length}`, value: active.filter((session) => session.paused_at).length ? active.filter((session) => session.paused_at).map((session) => `🟡 <@${session.user_id}>\n└ ☕ En pause depuis <t:${unix(session.paused_at)}:R>`).join("\n\n") : "Aucun agent en pause." },
-      { name: "🏆 CLASSEMENT HEBDOMADAIRE", value: weeklyLines }
+    .setColor(
+      working.length > 0
+        ? 0x2ecc71
+        : paused.length > 0
+          ? 0xf1c40f
+          : 0x5865f2
     )
-    .setFooter({ text: "Harmony Police Department • Actualisation automatique" })
+    .setAuthor({
+      name: "HARMONY POLICE DEPARTMENT",
+    })
+    .setTitle("🚔 Duty Management System")
+    .setDescription(
+      [
+        `**${departmentStatus}**`,
+        "",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━",
+      ].join("\n")
+    )
+    .addFields(
+      {
+        name: `👮 AGENTS EN SERVICE  •  ${working.length}`,
+        value: workingLines,
+        inline: false,
+      },
+      {
+        name: `☕ AGENTS EN PAUSE  •  ${paused.length}`,
+        value: pausedLines,
+        inline: false,
+      },
+      {
+        name: "🏆 CLASSEMENT HEBDOMADAIRE",
+        value: weeklyLines,
+        inline: false,
+      },
+      {
+        name: "📊 SYNTHÈSE DU SERVICE",
+        value: [
+          `> 👮 **Actifs :** ${working.length}`,
+          `> ☕ **En pause :** ${paused.length}`,
+          `> 📋 **Sessions ouvertes :** ${active.length}`,
+          `> ⏱️ **Top 5 cumulé :** ${formatDuration(totalWeeklySeconds)}`,
+        ].join("\n"),
+        inline: false,
+      }
+    )
+    .setFooter({
+      text: "Harmony Police Department • Mise à jour automatique",
+    })
     .setTimestamp();
 
   const row = new ActionRowBuilder().addComponents(
@@ -80,24 +162,33 @@ async function buildPanelPayload() {
       .setLabel("Début de service")
       .setEmoji("🟢")
       .setStyle(ButtonStyle.Success),
+
     new ButtonBuilder()
       .setCustomId("attendance:pause")
       .setLabel("Pause / Reprendre")
       .setEmoji("☕")
       .setStyle(ButtonStyle.Primary),
+
     new ButtonBuilder()
       .setCustomId("attendance:stop")
       .setLabel("Fin de service")
       .setEmoji("🔴")
       .setStyle(ButtonStyle.Danger),
+
     new ButtonBuilder()
       .setCustomId("attendance:status")
       .setLabel("Mes statistiques")
-      .setEmoji("⏱️")
+      .setEmoji("📊")
       .setStyle(ButtonStyle.Secondary)
   );
 
-  return { embeds: [embed], components: [row], allowedMentions: { parse: [] } };
+  return {
+    embeds: [embed],
+    components: [row],
+    allowedMentions: {
+      parse: [],
+    },
+  };
 }
 
 async function ensureAttendancePanel(client, forceNew = false) {
