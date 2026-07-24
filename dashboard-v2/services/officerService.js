@@ -10,7 +10,10 @@ const {
   getGradeFromPoints,
   getNextGrade,
   getGradeIndex,
+  getDiscordGradeFromRoles,
 } = require("../config/grades");
+
+const { getOfficerAttendanceTotal } = require("../dashboardDatabase");
 
 const {
   getDiscordMember,
@@ -140,10 +143,14 @@ async function enrichOfficer(officer) {
 
   const points = Number(officer.points) || 0;
   const nextGrade = getNextGrade(points);
+  const discordGrade = getDiscordGradeFromRoles(discordMember.roles);
+  const displayedGrade = discordGrade || officer.grade || getGradeFromPoints(points).name;
 
   return {
     ...officer,
     points,
+    grade: displayedGrade,
+    discord_grade: discordGrade,
 
     display_name:
       discordMember.displayName ||
@@ -261,7 +268,16 @@ async function getOfficerProfile(userId) {
   const safeUserId = normalizeUserId(userId);
   const officer = await getOfficer(safeUserId);
 
-  return enrichOfficer(officer);
+  const [enriched, attendance] = await Promise.all([
+    enrichOfficer(officer),
+    getOfficerAttendanceTotal(safeUserId),
+  ]);
+
+  return {
+    ...enriched,
+    total_attendance_seconds: attendance.total_seconds,
+    total_attendance_sessions: attendance.sessions,
+  };
 }
 
 async function getEnrichedLeaderboard(limit = 25) {

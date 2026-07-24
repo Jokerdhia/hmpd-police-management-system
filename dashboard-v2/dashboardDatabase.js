@@ -86,5 +86,23 @@ async function getAttendanceDaily(days=7){
     GROUP BY d.day ORDER BY d.day`,[safe])).rows;
   return rows.map(r=>({day:r.day,total_seconds:Number(r.total_seconds||0)}));
 }
+
+async function getOfficerAttendanceTotal(userId){
+  await ready;
+  const safeUserId=txt(userId,"userId",64);
+  const result=await pool.query(`
+    SELECT COALESCE(SUM(
+      CASE WHEN ended_at IS NULL THEN GREATEST(0,
+        FLOOR(EXTRACT(EPOCH FROM (COALESCE(paused_at,CURRENT_TIMESTAMP)-started_at)))::int
+        - COALESCE(paused_seconds,0))
+      ELSE COALESCE(duration_seconds,0) END
+    ),0)::bigint AS total_seconds,
+    COUNT(*)::int AS sessions
+    FROM attendance_sessions
+    WHERE user_id=$1`,[safeUserId]);
+  const row=result.rows[0]||{};
+  return {total_seconds:Number(row.total_seconds||0),sessions:Number(row.sessions||0)};
+}
+
 async function closeDatabase(){await pool.end()}
-module.exports={listNotes,addNote,deleteNote,listSanctions,addSanction,updateSanctionStatus,deleteSanction,listActivity,listOfficerActivity,getAttendanceSessions,getAttendanceActive,getAttendanceTotalsDashboard,getAttendanceDaily,closeDatabase};
+module.exports={listNotes,addNote,deleteNote,listSanctions,addSanction,updateSanctionStatus,deleteSanction,listActivity,listOfficerActivity,getAttendanceSessions,getAttendanceActive,getAttendanceTotalsDashboard,getAttendanceDaily,getOfficerAttendanceTotal,closeDatabase};

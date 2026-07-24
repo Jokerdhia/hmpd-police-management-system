@@ -23,3 +23,21 @@ IMPORTANT
   ROLE_POLICE=ID_ROLE_1,ID_ROLE_2,ID_ROLE_3
 - Retirer ROLE_POLICE remet les points à zéro, même si ROLE_HIGH_COMMAND est encore présent.
 - Retirer uniquement ROLE_HIGH_COMMAND conserve l'accès en lecture si ROLE_POLICE est présent, mais retire immédiatement les boutons de points.
+
+
+# IMPORTANT — vrais grades Discord affichés dans les profils
+# Mets les identifiants des rôles correspondant à ton serveur.
+ROLE_ACADEMY=ID_ROLE_ACADEMY
+ROLE_OFFICER=ID_ROLE_OFFICER
+ROLE_SENIOR_OFFICER=ID_ROLE_SENIOR_OFFICER
+ROLE_SERGENT=ID_ROLE_SERGENT
+ROLE_FIRST_SERGENT=ID_ROLE_FIRST_SERGENT
+ROLE_LIEUTENANT=ID_ROLE_LIEUTENANT
+ROLE_CAPTAIN=ID_ROLE_CAPTAIN
+ROLE_COMMANDER=ID_ROLE_COMMANDER
+ROLE_DEPUTY_CHIEF=ID_ROLE_DEPUTY_CHIEF
+ROLE_ASSISTANT_CHIEF=ID_ROLE_ASSISTANT_CHIEF
+ROLE_CHIEF_POLICE=ID_ROLE_CHIEF_POLICE
+
+Le dashboard choisit automatiquement le rôle le plus élevé présent sur le membre.
+Sans ces variables, il utilise l'ancien grade enregistré dans la base.
