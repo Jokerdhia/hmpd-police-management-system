@@ -46,46 +46,18 @@ const ROLE_HIGH_COMMAND = process.env.ROLE_HIGH_COMMAND;
 */
 
 const GRADES = [
-  {
-    name: "Academy",
-    points: 0,
-    roleId: process.env.ROLE_ACADEMY,
-  },
-  {
-    name: "Officer",
-    points: 10,
-    roleId: process.env.ROLE_OFFICER,
-  },
-  {
-    name: "Senior Officer",
-    points: 25,
-    roleId: process.env.ROLE_SENIOR_OFFICER,
-  },
-  {
-    name: "Sergent",
-    points: 45,
-    roleId: process.env.ROLE_SERGENT,
-  },
-  {
-    name: "First Sergent",
-    points: 70,
-    roleId: process.env.ROLE_FIRST_SERGENT,
-  },
-  {
-    name: "Lieutenant",
-    points: 100,
-    roleId: process.env.ROLE_LIEUTENANT,
-  },
-  {
-    name: "Captain",
-    points: 140,
-    roleId: process.env.ROLE_CAPTAIN,
-  },
-  {
-    name: "Commander",
-    points: 190,
-    roleId: process.env.ROLE_COMMANDER,
-  },
+  { name: "Academy", points: 0, roleId: process.env.ROLE_ACADEMY },
+  { name: "Officer", points: 10, roleId: process.env.ROLE_OFFICER },
+  { name: "Senior Officer", points: 25, roleId: process.env.ROLE_SENIOR_OFFICER },
+  { name: "Sergeant", points: 45, roleId: process.env.ROLE_SERGENT },
+  { name: "First Sergeant", points: 70, roleId: process.env.ROLE_FIRST_SERGENT },
+  { name: "Lieutenant", points: 100, roleId: process.env.ROLE_LIEUTENANT },
+  { name: "Captain", points: 140, roleId: process.env.ROLE_CAPTAIN },
+  { name: "Commander", points: 190, roleId: process.env.ROLE_COMMANDER },
+  { name: "Deputy Chief", points: 250, roleId: process.env.ROLE_DEPUTY_CHIEF },
+  { name: "Assistant Chief", points: 320, roleId: process.env.ROLE_ASSISTANT_CHIEF },
+  { name: "Vice Chief", points: 400, roleId: process.env.ROLE_VICE_CHIEF },
+  { name: "Chief Police", points: 500, roleId: process.env.ROLE_CHIEF_POLICE },
 ];
 
 /*
@@ -107,6 +79,10 @@ const requiredEnvironmentVariables = [
   "ROLE_LIEUTENANT",
   "ROLE_CAPTAIN",
   "ROLE_COMMANDER",
+  "ROLE_DEPUTY_CHIEF",
+  "ROLE_ASSISTANT_CHIEF",
+  "ROLE_VICE_CHIEF",
+  "ROLE_CHIEF_POLICE",
 ];
 
 const missingVariables = requiredEnvironmentVariables.filter(

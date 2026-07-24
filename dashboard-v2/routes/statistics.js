@@ -7,6 +7,7 @@ const {
 const {
   getDisplayGradeOrder,
   normalizeGradeName,
+  getPublicGradeRequirements,
 } = require("../config/grades");
 
 const router = express.Router();
@@ -66,6 +67,7 @@ router.get("/", async (request, response, next) => {
         averagePoints,
         highestOfficer,
         gradeStatistics,
+        gradeRequirements: getPublicGradeRequirements(),
       },
     });
   } catch (error) {

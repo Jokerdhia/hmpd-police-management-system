@@ -9,6 +9,7 @@ const {
 const {
   getGradeFromPoints,
   getNextGrade,
+  getGradeProgress,
   getGradeIndex,
   getDiscordGradeFromRoles,
   normalizeGradeName,
@@ -144,6 +145,7 @@ async function enrichOfficer(officer) {
 
   const points = Number(officer.points) || 0;
   const nextGrade = getNextGrade(points);
+  const gradeProgress = getGradeProgress(points);
   const discordGrade = getDiscordGradeFromRoles(discordMember.roles);
   const displayedGrade = normalizeGradeName(
     discordGrade || officer.grade || getGradeFromPoints(points).name
@@ -184,9 +186,10 @@ async function enrichOfficer(officer) {
         ? Number(nextGrade.points)
         : null,
 
-    points_until_next_grade: nextGrade
-      ? Math.max(Number(nextGrade.points) - points, 0)
-      : 0,
+    points_until_next_grade: gradeProgress.pointsRemaining,
+    grade_progress_percent: gradeProgress.progressPercent,
+    current_grade_points: gradeProgress.currentGradePoints,
+    grade_progress: gradeProgress,
   };
 }
 

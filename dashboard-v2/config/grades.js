@@ -7,6 +7,10 @@ const GRADES = [
   { name: 'Lieutenant', points: 100, roleId: process.env.ROLE_LIEUTENANT },
   { name: 'Captain', points: 140, roleId: process.env.ROLE_CAPTAIN },
   { name: 'Commander', points: 190, roleId: process.env.ROLE_COMMANDER },
+  { name: 'Deputy Chief', points: 250, roleId: process.env.ROLE_DEPUTY_CHIEF },
+  { name: 'Assistant Chief', points: 320, roleId: process.env.ROLE_ASSISTANT_CHIEF },
+  { name: 'Vice Chief', points: 400, roleId: process.env.ROLE_VICE_CHIEF },
+  { name: 'Chief Police', points: 500, roleId: process.env.ROLE_CHIEF_POLICE },
 ];
 
 function getGradeFromPoints(points) {
@@ -21,6 +25,46 @@ function getNextGrade(points) {
   return GRADES.find((grade) => grade.points > Number(points)) || null;
 }
 
+function getGradeProgress(points) {
+  const safePoints = Math.max(0, Number(points) || 0);
+  const current = getGradeFromPoints(safePoints);
+  const next = getNextGrade(safePoints);
+  const currentFloor = Number(current.points) || 0;
+
+  if (!next) {
+    return {
+      currentGrade: current.name,
+      currentGradePoints: currentFloor,
+      nextGrade: null,
+      nextGradePoints: null,
+      pointsRemaining: 0,
+      progressPercent: 100,
+      isMaximum: true,
+    };
+  }
+
+  const interval = Math.max(Number(next.points) - currentFloor, 1);
+  const earnedInGrade = Math.max(safePoints - currentFloor, 0);
+
+  return {
+    currentGrade: current.name,
+    currentGradePoints: currentFloor,
+    nextGrade: next.name,
+    nextGradePoints: Number(next.points),
+    pointsRemaining: Math.max(Number(next.points) - safePoints, 0),
+    progressPercent: Math.min(100, Math.max(0, Math.round((earnedInGrade / interval) * 100))),
+    isMaximum: false,
+  };
+}
+
+function getPublicGradeRequirements() {
+  return GRADES.map(({ name, points }, index) => ({
+    name,
+    points,
+    nextGrade: GRADES[index + 1]?.name || null,
+  }));
+}
+
 function getAllGradeRoleIds() {
   return GRADES.map((grade) => grade.roleId).filter(Boolean);
 }
@@ -30,24 +74,9 @@ function getGradeIndex(name) {
   return GRADES.findIndex((grade) => grade.name === normalized);
 }
 
-/*
- * Hiérarchie Discord réelle, du grade le plus élevé au plus bas.
- * Le premier rôle trouvé sur le membre est celui affiché partout dans le dashboard.
- */
-const DISCORD_DISPLAY_GRADES = [
-  { name: 'Chief Police', roleId: process.env.ROLE_CHIEF_POLICE },
-  { name: 'Vice Chief', roleId: process.env.ROLE_VICE_CHIEF },
-  { name: 'Assistant Chief', roleId: process.env.ROLE_ASSISTANT_CHIEF },
-  { name: 'Deputy Chief', roleId: process.env.ROLE_DEPUTY_CHIEF },
-  { name: 'Commander', roleId: process.env.ROLE_COMMANDER },
-  { name: 'Captain', roleId: process.env.ROLE_CAPTAIN },
-  { name: 'Lieutenant', roleId: process.env.ROLE_LIEUTENANT },
-  { name: 'First Sergeant', roleId: process.env.ROLE_FIRST_SERGENT },
-  { name: 'Sergeant', roleId: process.env.ROLE_SERGENT },
-  { name: 'Senior Officer', roleId: process.env.ROLE_SENIOR_OFFICER },
-  { name: 'Officer', roleId: process.env.ROLE_OFFICER },
-  { name: 'Academy', roleId: process.env.ROLE_ACADEMY },
-];
+const DISCORD_DISPLAY_GRADES = [...GRADES]
+  .reverse()
+  .map(({ name, roleId }) => ({ name, roleId }));
 
 const GRADE_ALIASES = new Map([
   ['sergent', 'Sergeant'],
@@ -77,22 +106,16 @@ function normalizeGradeName(name) {
 }
 
 function getDiscordGradeFromRoles(roles) {
-  const memberRoles = new Set(
-    (Array.isArray(roles) ? roles : []).map(String)
-  );
-
+  const memberRoles = new Set((Array.isArray(roles) ? roles : []).map(String));
   const match = DISCORD_DISPLAY_GRADES.find((grade) => {
     const roleId = String(grade.roleId || '').trim();
     return roleId && memberRoles.has(roleId);
   });
-
   return match?.name || null;
 }
 
 function getDisplayGradeOrder() {
-  return [...DISCORD_DISPLAY_GRADES]
-    .reverse()
-    .map((grade) => grade.name);
+  return GRADES.map((grade) => grade.name);
 }
 
 module.exports = {
@@ -100,6 +123,8 @@ module.exports = {
   DISCORD_DISPLAY_GRADES,
   getGradeFromPoints,
   getNextGrade,
+  getGradeProgress,
+  getPublicGradeRequirements,
   getAllGradeRoleIds,
   getGradeIndex,
   getDiscordGradeFromRoles,
