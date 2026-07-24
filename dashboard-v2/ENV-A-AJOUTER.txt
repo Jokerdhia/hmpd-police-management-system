@@ -37,7 +37,10 @@ ROLE_CAPTAIN=ID_ROLE_CAPTAIN
 ROLE_COMMANDER=ID_ROLE_COMMANDER
 ROLE_DEPUTY_CHIEF=ID_ROLE_DEPUTY_CHIEF
 ROLE_ASSISTANT_CHIEF=ID_ROLE_ASSISTANT_CHIEF
+ROLE_VICE_CHIEF=ID_ROLE_VICE_CHIEF
 ROLE_CHIEF_POLICE=ID_ROLE_CHIEF_POLICE
+
+Ordre des grades : Academy → Officer → Senior Officer → Sergeant → First Sergeant → Lieutenant → Captain → Commander → Deputy Chief → Assistant Chief → Vice Chief → Chief Police.
 
 Le dashboard choisit automatiquement le rôle le plus élevé présent sur le membre.
 Sans ces variables, il utilise l'ancien grade enregistré dans la base.

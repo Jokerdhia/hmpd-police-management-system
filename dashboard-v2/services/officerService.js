@@ -11,6 +11,7 @@ const {
   getNextGrade,
   getGradeIndex,
   getDiscordGradeFromRoles,
+  normalizeGradeName,
 } = require("../config/grades");
 
 const { getOfficerAttendanceTotal } = require("../dashboardDatabase");
@@ -144,7 +145,9 @@ async function enrichOfficer(officer) {
   const points = Number(officer.points) || 0;
   const nextGrade = getNextGrade(points);
   const discordGrade = getDiscordGradeFromRoles(discordMember.roles);
-  const displayedGrade = discordGrade || officer.grade || getGradeFromPoints(points).name;
+  const displayedGrade = normalizeGradeName(
+    discordGrade || officer.grade || getGradeFromPoints(points).name
+  );
 
   return {
     ...officer,
