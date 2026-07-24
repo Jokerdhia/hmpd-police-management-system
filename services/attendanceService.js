@@ -29,6 +29,8 @@ const ROLE_HIGH_COMMAND = String(
 ).trim();
 
 const PANEL_SETTING_KEY = "attendance_panel_message_id";
+const DEPARTMENT_NAME = String(process.env.DEPARTMENT_NAME || DEPARTMENT_NAME).trim();
+const DEPARTMENT_SHORT_NAME = String(process.env.DEPARTMENT_SHORT_NAME || "HMPD").trim();
 const forceSelectionByModerator = new Map();
 
 function formatDuration(totalSeconds) {
@@ -126,6 +128,14 @@ async function buildPanelPayload(client) {
     0
   );
 
+  const weekStart = Math.floor(new Date(
+    new Date().setDate(new Date().getDate() - ((new Date().getDay() + 6) % 7))
+  ).setHours(0, 0, 0, 0) / 1000);
+
+  const weeklyChampion = weekly.find(
+    (entry) => Number(entry.total_seconds || 0) > 0
+  );
+
   const departmentStatus =
     working.length > 0
       ? "🟢 Département opérationnel"
@@ -142,13 +152,14 @@ async function buildPanelPayload(client) {
           : 0x5865f2
     )
     .setAuthor({
-      name: "HARMONY POLICE DEPARTMENT",
+      name: DEPARTMENT_NAME,
     })
-    .setTitle("🚔 Duty Management System")
+    .setTitle("🚔 CENTRE DE GESTION DES SERVICES")
     .setDescription(
       [
         `**${departmentStatus}**`,
         "",
+        `📅 Semaine en cours depuis <t:${weekStart}:D>`,
         "━━━━━━━━━━━━━━━━━━━━━━━━━━",
       ].join("\n")
     )
@@ -174,15 +185,17 @@ async function buildPanelPayload(client) {
           `> 👮 **Agents en service :** ${working.length}`,
           `> ☕ **Agents en pause :** ${paused.length}`,
           `> 📋 **Sessions ouvertes :** ${active.length}`,
-          `> 🏆 **Temps cumulé du Top 3 :** ${formatDuration(
+          `> 🏆 **Leader de la semaine :** ${weeklyChampion ? `<@${weeklyChampion.user_id}>` : "Aucun classement"}`,
+          `> ⏱️ **Temps cumulé du Top 3 :** ${formatDuration(
             totalWeeklySeconds
           )}`,
+          `> 🔄 **Mise à jour :** automatique chaque minute`,
         ].join("\n"),
         inline: false,
       }
     )
     .setFooter({
-      text: "Harmony Police Department • Mise à jour automatique",
+      text: `${DEPARTMENT_NAME} • Actualisation automatique • Reset du classement chaque lundi`,
     })
     .setTimestamp();
 
@@ -218,9 +231,17 @@ async function buildPanelPayload(client) {
       .setStyle(ButtonStyle.Secondary)
   );
 
+  const utilityRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("attendance:refresh")
+      .setLabel("Actualiser le panneau")
+      .setEmoji("🔄")
+      .setStyle(ButtonStyle.Secondary)
+  );
+
   return {
     embeds: [embed],
-    components: [row],
+    components: [row, utilityRow],
     allowedMentions: {
       parse: [],
     },
@@ -294,7 +315,7 @@ async function sendAttendanceLog(
   const embed = new EmbedBuilder()
     .setColor(forced ? 0x992d22 : 0xe74c3c)
     .setAuthor({
-      name: "HARMONY POLICE DEPARTMENT",
+      name: DEPARTMENT_NAME,
     })
     .setTitle(
       forced
@@ -343,7 +364,7 @@ async function sendAttendanceLog(
       }
     )
     .setFooter({
-      text: "Harmony Police Department • Duty Report",
+      text: `${DEPARTMENT_NAME} • Rapport de service`,
     })
     .setTimestamp();
 
@@ -376,20 +397,21 @@ async function buildHighCommandPanel(client) {
   const embed = new EmbedBuilder()
     .setColor(0x992d22)
     .setAuthor({
-      name: "HARMONY POLICE DEPARTMENT",
+      name: DEPARTMENT_NAME,
     })
-    .setTitle("🛡️ Administration des présences")
+    .setTitle("🛡️ CENTRE D’ADMINISTRATION DES PRÉSENCES")
     .setDescription(
       active.length
         ? [
             `**${active.length} session(s) actuellement ouverte(s).**`,
             "",
-            "Sélectionne un agent, puis confirme la fin forcée de son service.",
+            "Sélectionne un agent, vérifie son statut, puis confirme la fin forcée de son service.",
+            "⚠️ Toute fin forcée est enregistrée dans les logs administratifs.",
           ].join("\n")
         : "Aucune session active à administrer."
     )
     .setFooter({
-      text: "Accès réservé au High Command",
+      text: `${DEPARTMENT_NAME} • Accès réservé au High Command`,
     })
     .setTimestamp();
 
@@ -427,9 +449,10 @@ async function buildHighCommandPanel(client) {
       new StringSelectMenuOptionBuilder()
         .setLabel(label)
         .setDescription(
-          session.paused_at
-            ? "Agent actuellement en pause"
-            : "Agent actuellement en service"
+          (session.paused_at
+            ? "En pause"
+            : "En service") +
+          ` • commencé ${new Date(session.started_at).toLocaleString("fr-FR", { timeZone: "Europe/Brussels", hour: "2-digit", minute: "2-digit" })}`
         )
         .setValue(session.user_id)
         .setEmoji(
@@ -536,7 +559,10 @@ async function handleAttendanceButton(interaction, client) {
     return true;
   }
 
-  if (!memberIsPolice(interaction.member)) {
+  if (
+    !memberIsPolice(interaction.member) &&
+    !memberIsHighCommand(interaction.member, interaction)
+  ) {
     await interaction.editReply(
       "❌ Tu dois avoir le rôle Police pour utiliser la présence."
     );
@@ -545,6 +571,14 @@ async function handleAttendanceButton(interaction, client) {
 
   const customIdParts = interaction.customId.split(":");
   const action = customIdParts[1];
+
+  if (action === "refresh") {
+    await refreshAttendancePanel(client);
+    await interaction.editReply(
+      "✅ Le panneau de présence vient d’être actualisé."
+    );
+    return true;
+  }
 
   if (action === "force-confirm") {
     if (
@@ -827,7 +861,7 @@ async function handleAttendanceButton(interaction, client) {
           : 0x5865f2
       )
       .setAuthor({
-        name: "HARMONY POLICE DEPARTMENT",
+        name: DEPARTMENT_NAME,
       })
       .setTitle("📊 Mes statistiques de service")
       .setThumbnail(
@@ -882,7 +916,7 @@ async function handleAttendanceButton(interaction, client) {
         }
       )
       .setFooter({
-        text: "Harmony Police Department • Statistiques personnelles",
+        text: `${DEPARTMENT_NAME} • Statistiques personnelles`,
       })
       .setTimestamp();
 
