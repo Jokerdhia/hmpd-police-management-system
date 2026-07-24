@@ -65,6 +65,18 @@ const ready = (async () => {
     CREATE INDEX IF NOT EXISTS idx_attendance_active
       ON attendance_sessions(started_at) WHERE ended_at IS NULL;
 
+    CREATE TABLE IF NOT EXISTS attendance_adjustments (
+      id BIGSERIAL PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      removed_seconds INTEGER NOT NULL CHECK(removed_seconds > 0),
+      reason TEXT NOT NULL,
+      moderator_id TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_attendance_adjustments_user
+      ON attendance_adjustments(user_id, created_at DESC);
+
     CREATE TABLE IF NOT EXISTS bot_settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL,
@@ -522,6 +534,84 @@ async function resetOfficerAttendance(userId) {
   };
 }
 
+async function removeAttendanceTime({ userId, seconds, reason, moderatorId }) {
+  await ready;
+
+  const safeUserId = normalizeUserId(userId);
+  const safeSeconds = Number(seconds);
+  const safeReason = normalizeReason(reason);
+  const safeModeratorId = normalizeModeratorId(moderatorId);
+
+  if (!Number.isInteger(safeSeconds) || safeSeconds <= 0 || safeSeconds > 31 * 24 * 3600) {
+    throw new Error("La durée à retirer est invalide.");
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const sessions = await client.query(
+      `SELECT id, COALESCE(duration_seconds, 0)::int AS duration_seconds
+       FROM attendance_sessions
+       WHERE user_id = $1
+         AND ended_at IS NOT NULL
+         AND COALESCE(duration_seconds, 0) > 0
+       ORDER BY ended_at DESC, id DESC
+       FOR UPDATE`,
+      [safeUserId]
+    );
+
+    const availableSeconds = sessions.rows.reduce(
+      (total, row) => total + Number(row.duration_seconds || 0),
+      0
+    );
+
+    if (availableSeconds <= 0) {
+      const error = new Error("Ce policier ne possède aucune heure terminée à retirer.");
+      error.status = 409;
+      error.publicMessage = error.message;
+      throw error;
+    }
+
+    const actualRemoved = Math.min(safeSeconds, availableSeconds);
+    let remaining = actualRemoved;
+
+    for (const session of sessions.rows) {
+      if (remaining <= 0) break;
+      const current = Number(session.duration_seconds || 0);
+      const removed = Math.min(current, remaining);
+      await client.query(
+        `UPDATE attendance_sessions
+         SET duration_seconds = GREATEST(0, COALESCE(duration_seconds, 0) - $2)
+         WHERE id = $1`,
+        [session.id, removed]
+      );
+      remaining -= removed;
+    }
+
+    const audit = await client.query(
+      `INSERT INTO attendance_adjustments
+         (user_id, removed_seconds, reason, moderator_id)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, user_id, removed_seconds, reason, moderator_id, created_at`,
+      [safeUserId, actualRemoved, safeReason, safeModeratorId]
+    );
+
+    await client.query("COMMIT");
+    return {
+      requestedSeconds: safeSeconds,
+      removedSeconds: actualRemoved,
+      availableBefore: availableSeconds,
+      adjustment: audit.rows[0],
+    };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 async function setBotSetting(key, value) {
   await ready;
   const safeKey = String(key || "").trim();
@@ -556,6 +646,7 @@ module.exports = {
   getActiveAttendances,
   getAttendanceTotals,
   resetOfficerAttendance,
+  removeAttendanceTime,
   setBotSetting,
   getBotSetting,
   closeDatabase
