@@ -572,9 +572,9 @@ async function handleAttendanceSelect(
     return false;
   }
 
-  await interaction.deferReply({
-    flags: MessageFlags.Ephemeral,
-  });
+  // Le menu appartient déjà au panneau privé d'administration.
+  // deferUpdate accuse réception sans créer un nouveau message éphémère.
+  await interaction.deferUpdate();
 
   if (
     !memberIsHighCommand(
@@ -618,11 +618,22 @@ async function handleAttendanceSelect(
 async function handleAttendanceButton(interaction, client) {
   if (!interaction.customId?.startsWith("attendance:")) return false;
 
-  // Discord exige une réponse en moins de 3 secondes.
-  // On accuse donc réception immédiatement, avant toute vérification ou requête SQL.
-  await interaction.deferReply({
-    flags: MessageFlags.Ephemeral,
-  });
+  const customIdParts = interaction.customId.split(":");
+  const action = customIdParts[1];
+
+  // Un clic depuis le panneau public doit ouvrir un espace privé.
+  // Un clic depuis cet espace privé doit modifier le même message, jamais en créer un autre.
+  const sourceIsEphemeral = Boolean(
+    interaction.message?.flags?.has?.(MessageFlags.Ephemeral)
+  );
+
+  if (sourceIsEphemeral) {
+    await interaction.deferUpdate();
+  } else {
+    await interaction.deferReply({
+      flags: MessageFlags.Ephemeral,
+    });
+  }
 
   if (!interaction.guild || !interaction.member) {
     await interaction.editReply(
@@ -631,8 +642,6 @@ async function handleAttendanceButton(interaction, client) {
     return true;
   }
 
-  const customIdParts = interaction.customId.split(":");
-  const action = customIdParts[1];
   const isAdminAction = action === "admin" || action === "admin-refresh" || action === "force-confirm";
 
   if (!memberIsPolice(interaction.member) && !isAdminAction) {
@@ -644,7 +653,7 @@ async function handleAttendanceButton(interaction, client) {
 
   if (action === "controls") {
     const payload = await buildPersonalControlsPayload(interaction);
-    await interaction.editReply(payload);
+    await interaction.editReply({ content: null, ...payload });
     return true;
   }
 
@@ -876,7 +885,7 @@ async function handleAttendanceButton(interaction, client) {
     const payload =
       await buildHighCommandPanel(client, interaction.guild);
 
-    await interaction.editReply(payload);
+    await interaction.editReply({ content: null, ...payload });
     return true;
   }
 
@@ -1007,9 +1016,32 @@ async function handleAttendanceButton(interaction, client) {
       })
       .setTimestamp();
 
+    const navigationComponents = [
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("attendance:controls")
+          .setLabel("Retour à mon espace")
+          .setEmoji("↩️")
+          .setStyle(ButtonStyle.Primary)
+      ),
+    ];
+
+    if (memberIsHighCommand(interaction.member, interaction)) {
+      navigationComponents.push(
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
+            .setCustomId("attendance:admin")
+            .setLabel("Administration High Command")
+            .setEmoji("🛡️")
+            .setStyle(ButtonStyle.Secondary)
+        )
+      );
+    }
+
     await interaction.editReply({
+      content: null,
       embeds: [statsEmbed],
-      components: [],
+      components: navigationComponents,
       allowedMentions: {
         parse: [],
       },
