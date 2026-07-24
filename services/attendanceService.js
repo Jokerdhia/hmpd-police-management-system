@@ -29,7 +29,7 @@ const ROLE_HIGH_COMMAND = String(
 ).trim();
 
 const PANEL_SETTING_KEY = "attendance_panel_message_id";
-const DEPARTMENT_NAME = String(process.env.DEPARTMENT_NAME || DEPARTMENT_NAME).trim();
+const DEPARTMENT_NAME = String(process.env.DEPARTMENT_NAME || "HARMONY POLICE DEPARTMENT").trim();
 const DEPARTMENT_SHORT_NAME = String(process.env.DEPARTMENT_SHORT_NAME || "HMPD").trim();
 const forceSelectionByModerator = new Map();
 
@@ -394,24 +394,47 @@ async function sendAttendanceLog(
 async function buildHighCommandPanel(client) {
   const active = await getActiveAttendances();
 
+  const activeAgentLines = [];
+
+  for (const session of active.slice(0, 25)) {
+    const user = await client.users.fetch(session.user_id).catch(() => null);
+    const displayName = String(
+      user?.globalName || user?.username || session.user_id
+    )
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 80);
+
+    const statusText = session.paused_at
+      ? `☕ En pause depuis <t:${unix(session.paused_at)}:R>`
+      : `🟢 En service depuis <t:${unix(session.started_at)}:R>`;
+
+    activeAgentLines.push(
+      `**${activeAgentLines.length + 1}. ${displayName}** — <@${session.user_id}>\n` +
+      `└ ${statusText}`
+    );
+  }
+
   const embed = new EmbedBuilder()
-    .setColor(0x992d22)
-    .setAuthor({
-      name: DEPARTMENT_NAME,
-    })
+    .setColor(active.length ? 0x992d22 : 0x5865f2)
+    .setAuthor({ name: DEPARTMENT_NAME })
     .setTitle("🛡️ CENTRE D’ADMINISTRATION DES PRÉSENCES")
     .setDescription(
       active.length
         ? [
             `**${active.length} session(s) actuellement ouverte(s).**`,
             "",
-            "Sélectionne un agent, vérifie son statut, puis confirme la fin forcée de son service.",
+            "### 👮 Agents actuellement connectés",
+            activeAgentLines.join("\n\n"),
+            "",
+            "### ⚙️ Action administrative",
+            "Choisis l’agent dans le menu ci-dessous, puis confirme la fin forcée de son service.",
             "⚠️ Toute fin forcée est enregistrée dans les logs administratifs.",
           ].join("\n")
         : "Aucune session active à administrer."
     )
     .setFooter({
-      text: `${DEPARTMENT_NAME} • Accès réservé au High Command`,
+      text: `${DEPARTMENT_NAME} • Accès réservé au High Command • Liste actualisée`,
     })
     .setTimestamp();
 
@@ -419,27 +442,21 @@ async function buildHighCommandPanel(client) {
     return {
       embeds: [embed],
       components: [],
-      allowedMentions: {
-        parse: [],
-      },
+      allowedMentions: { parse: [] },
     };
   }
 
   const selectMenu = new StringSelectMenuBuilder()
     .setCustomId("attendance:force-select")
-    .setPlaceholder("Sélectionner un agent en service")
+    .setPlaceholder(`Sélectionner un agent (${active.length} disponible${active.length > 1 ? "s" : ""})`)
     .setMinValues(1)
     .setMaxValues(1);
 
   for (const session of active.slice(0, 25)) {
-    const user = await client.users
-      .fetch(session.user_id)
-      .catch(() => null);
+    const user = await client.users.fetch(session.user_id).catch(() => null);
 
     const label = String(
-      user?.globalName ||
-      user?.username ||
-      session.user_id
+      user?.globalName || user?.username || session.user_id
     )
       .replace(/\s+/g, " ")
       .trim()
@@ -449,43 +466,32 @@ async function buildHighCommandPanel(client) {
       new StringSelectMenuOptionBuilder()
         .setLabel(label)
         .setDescription(
-          (session.paused_at
-            ? "En pause"
-            : "En service") +
-          ` • commencé ${new Date(session.started_at).toLocaleString("fr-FR", { timeZone: "Europe/Brussels", hour: "2-digit", minute: "2-digit" })}`
+          (session.paused_at ? "En pause" : "En service") +
+          ` • début ${new Date(session.started_at).toLocaleString("fr-FR", {
+            timeZone: "Europe/Brussels",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}`
         )
-        .setValue(session.user_id)
-        .setEmoji(
-          session.paused_at
-            ? "☕"
-            : "🟢"
-        )
+        .setValue(String(session.user_id))
+        .setEmoji(session.paused_at ? "☕" : "🟢")
     );
   }
 
-  const selectRow =
-    new ActionRowBuilder().addComponents(
-      selectMenu
-    );
+  const selectRow = new ActionRowBuilder().addComponents(selectMenu);
 
-  const confirmRow =
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("attendance:force-confirm")
-        .setLabel("Forcer la fin du service")
-        .setEmoji("🛑")
-        .setStyle(ButtonStyle.Danger)
-    );
+  const confirmRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("attendance:force-confirm")
+      .setLabel("Forcer la fin du service")
+      .setEmoji("🛑")
+      .setStyle(ButtonStyle.Danger)
+  );
 
   return {
     embeds: [embed],
-    components: [
-      selectRow,
-      confirmRow,
-    ],
-    allowedMentions: {
-      parse: [],
-    },
+    components: [selectRow, confirmRow],
+    allowedMentions: { parse: [] },
   };
 }
 
