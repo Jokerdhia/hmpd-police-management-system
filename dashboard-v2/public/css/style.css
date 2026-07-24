@@ -9,10 +9,3 @@ body.modal-open{overflow:hidden}.attendance-correction-card{width:min(590px,100%
 
 .profile-card small{display:block;margin-top:6px;color:var(--muted);font-size:12px;font-weight:700}
 @media(max-width:1200px){.profile-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-
-
-/* HMPD Pro Pack */
-.stats-grid{grid-template-columns:repeat(6,minmax(0,1fr))}
-.achievement-section{padding:0 24px 20px}.achievement-section h3{margin:0 0 12px}.achievement-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.achievement{display:flex;align-items:center;gap:11px;padding:13px;border:1px solid var(--line);border-radius:13px;background:var(--panel-2)}.achievement>span{font-size:25px}.achievement strong,.achievement small{display:block}.achievement small{margin-top:4px;color:var(--muted)}.promotion-alert{margin:0 24px 20px;padding:13px 15px;border:1px solid rgba(244,200,76,.35);border-radius:12px;background:rgba(244,200,76,.1);color:#ffe59a}
-:root[data-theme="light"]{--bg:#eef4fb;--sidebar:#ffffff;--panel:#ffffff;--panel-2:#f4f7fb;--line:#d7e0ec;--muted:#607086;--text:#142033;--shadow:0 18px 45px rgba(30,55,90,.12)}:root[data-theme="light"] body{background:var(--bg);color:var(--text)}:root[data-theme="light"] .sidebar{background:linear-gradient(180deg,#fff,#f3f7fc)}:root[data-theme="light"] .btn-secondary,:root[data-theme="light"] .clock,:root[data-theme="light"] .profile-button,:root[data-theme="light"] .icon-btn,:root[data-theme="light"] .tab,:root[data-theme="light"] input,:root[data-theme="light"] textarea,:root[data-theme="light"] select{color:var(--text)}:root[data-theme="light"] .chart-wrap canvas{filter:none}
-@media(max-width:1450px){.stats-grid{grid-template-columns:repeat(3,1fr)}}@media(max-width:900px){.stats-grid{grid-template-columns:repeat(2,1fr)}.achievement-grid{grid-template-columns:1fr}}@media(max-width:560px){.stats-grid{grid-template-columns:1fr}.topbar-actions{flex-wrap:wrap}}
