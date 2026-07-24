@@ -1,38 +1,24 @@
-SYSTÈME DE PRÉSENCE HMPD — VERSION PROFESSIONNELLE
+SYSTÈME DE PRÉSENCE HMPD
 
-1. Variables Render > Environment
+Ajoute dans Render > Environment :
 
 ATTENDANCE_CHANNEL_ID=ID_DU_SALON_PRESENCE
 ATTENDANCE_LOG_CHANNEL_ID=ID_DU_SALON_LOGS_PRESENCE
-ROLE_POLICE=ID_DU_ROLE_POLICE
-ROLE_HIGH_COMMAND=ID_DU_ROLE_HIGH_COMMAND
 
-Variables facultatives :
-DEPARTMENT_NAME=HARMONY POLICE DEPARTMENT
-DEPARTMENT_SHORT_NAME=HMPD
+ROLE_POLICE doit déjà contenir le rôle principal Police.
 
-2. Après le déploiement
-
+Après le déploiement, lance une fois :
 node deploy-commands.js
 
-Puis exécuter dans Discord :
+Puis dans Discord :
 /presencepanel
 
-FONCTIONS
-- Début de service
-- Pause et reprise du compteur
-- Fin de service avec rapport détaillé
-- Statistiques personnelles : jour, semaine, mois et position
-- Liste en direct des agents en service et en pause
-- Top 3 hebdomadaire
-- Reset logique automatique du classement chaque lundi
-- Actualisation automatique du panneau chaque minute
-- Bouton d’actualisation manuelle
-- Administration High Command avec sélection et fin forcée
-- Logs des fins normales et forcées
-- Stockage permanent dans Neon PostgreSQL
-- Protection contre les doubles sessions
-- Tableau de bord web avec correction des heures pour le High Command
-
-IMPORTANT
-Le bot doit avoir les permissions : Voir le salon, Envoyer des messages, Intégrer des liens et Lire l’historique des messages.
+Fonctions :
+- bouton Prendre son service
+- bouton Finir son service
+- bouton Mon temps
+- panneau actualisé automatiquement
+- classement hebdomadaire
+- logs début/fin de service
+- stockage permanent dans Neon PostgreSQL
+- protection contre deux services actifs pour le même policier

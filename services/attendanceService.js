@@ -29,8 +29,6 @@ const ROLE_HIGH_COMMAND = String(
 ).trim();
 
 const PANEL_SETTING_KEY = "attendance_panel_message_id";
-const DEPARTMENT_NAME = String(process.env.DEPARTMENT_NAME || "HARMONY POLICE DEPARTMENT").trim();
-const DEPARTMENT_SHORT_NAME = String(process.env.DEPARTMENT_SHORT_NAME || "HMPD").trim();
 const forceSelectionByModerator = new Map();
 
 function formatDuration(totalSeconds) {
@@ -71,10 +69,8 @@ async function fetchTextChannel(client, channelId) {
   return channel?.isTextBased?.() ? channel : null;
 }
 
-async function buildPanelPayload(client, activeOverride = null) {
-  const active = Array.isArray(activeOverride)
-    ? activeOverride
-    : await getActiveAttendances();
+async function buildPanelPayload(client) {
+  const active = await getActiveAttendances();
   const weekly = await getAttendanceTotals("week", 3);
 
   const working = active.filter(
@@ -130,14 +126,6 @@ async function buildPanelPayload(client, activeOverride = null) {
     0
   );
 
-  const weekStart = Math.floor(new Date(
-    new Date().setDate(new Date().getDate() - ((new Date().getDay() + 6) % 7))
-  ).setHours(0, 0, 0, 0) / 1000);
-
-  const weeklyChampion = weekly.find(
-    (entry) => Number(entry.total_seconds || 0) > 0
-  );
-
   const departmentStatus =
     working.length > 0
       ? "🟢 Département opérationnel"
@@ -154,14 +142,13 @@ async function buildPanelPayload(client, activeOverride = null) {
           : 0x5865f2
     )
     .setAuthor({
-      name: DEPARTMENT_NAME,
+      name: "HARMONY POLICE DEPARTMENT",
     })
-    .setTitle("🚔 CENTRE DE GESTION DES SERVICES")
+    .setTitle("🚔 Duty Management System")
     .setDescription(
       [
         `**${departmentStatus}**`,
         "",
-        `📅 Semaine en cours depuis <t:${weekStart}:D>`,
         "━━━━━━━━━━━━━━━━━━━━━━━━━━",
       ].join("\n")
     )
@@ -187,17 +174,15 @@ async function buildPanelPayload(client, activeOverride = null) {
           `> 👮 **Agents en service :** ${working.length}`,
           `> ☕ **Agents en pause :** ${paused.length}`,
           `> 📋 **Sessions ouvertes :** ${active.length}`,
-          `> 🏆 **Leader de la semaine :** ${weeklyChampion ? `<@${weeklyChampion.user_id}>` : "Aucun classement"}`,
-          `> ⏱️ **Temps cumulé du Top 3 :** ${formatDuration(
+          `> 🏆 **Temps cumulé du Top 3 :** ${formatDuration(
             totalWeeklySeconds
           )}`,
-          `> 🔄 **Mise à jour :** automatique chaque minute`,
         ].join("\n"),
         inline: false,
       }
     )
     .setFooter({
-      text: `${DEPARTMENT_NAME} • Actualisation automatique • Reset du classement chaque lundi`,
+      text: "Harmony Police Department • Mise à jour automatique",
     })
     .setTimestamp();
 
@@ -233,24 +218,16 @@ async function buildPanelPayload(client, activeOverride = null) {
       .setStyle(ButtonStyle.Secondary)
   );
 
-  const utilityRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("attendance:refresh")
-      .setLabel("Actualiser le panneau")
-      .setEmoji("🔄")
-      .setStyle(ButtonStyle.Secondary)
-  );
-
   return {
     embeds: [embed],
-    components: [row, utilityRow],
+    components: [row],
     allowedMentions: {
       parse: [],
     },
   };
 }
 
-async function ensureAttendancePanel(client, forceNew = false, activeOverride = null) {
+async function ensureAttendancePanel(client, forceNew = false) {
   if (!ATTENDANCE_CHANNEL_ID) {
     console.warn("⚠️ ATTENDANCE_CHANNEL_ID absent : panneau de présence désactivé.");
     return null;
@@ -258,7 +235,7 @@ async function ensureAttendancePanel(client, forceNew = false, activeOverride = 
   const channel = await fetchTextChannel(client, ATTENDANCE_CHANNEL_ID);
   if (!channel) throw new Error("Salon de présence introuvable ou non textuel.");
 
-  const payload = await buildPanelPayload(client, activeOverride);
+  const payload = await buildPanelPayload(client);
   let message = null;
   if (!forceNew) {
     const messageId = await getBotSetting(PANEL_SETTING_KEY);
@@ -273,8 +250,8 @@ async function ensureAttendancePanel(client, forceNew = false, activeOverride = 
   return message;
 }
 
-async function refreshAttendancePanel(client, activeOverride = null) {
-  return ensureAttendancePanel(client, false, activeOverride).catch((error) => {
+async function refreshAttendancePanel(client) {
+  return ensureAttendancePanel(client, false).catch((error) => {
     console.error("❌ Actualisation du panneau de présence impossible :", error?.message || error);
     return null;
   });
@@ -317,7 +294,7 @@ async function sendAttendanceLog(
   const embed = new EmbedBuilder()
     .setColor(forced ? 0x992d22 : 0xe74c3c)
     .setAuthor({
-      name: DEPARTMENT_NAME,
+      name: "HARMONY POLICE DEPARTMENT",
     })
     .setTitle(
       forced
@@ -366,7 +343,7 @@ async function sendAttendanceLog(
       }
     )
     .setFooter({
-      text: `${DEPARTMENT_NAME} • Rapport de service`,
+      text: "Harmony Police Department • Duty Report",
     })
     .setTimestamp();
 
@@ -393,52 +370,26 @@ async function sendAttendanceLog(
   }
 }
 
-async function buildHighCommandPanel(client, activeOverride = null) {
-  const active = Array.isArray(activeOverride)
-    ? activeOverride
-    : await getActiveAttendances();
-
-  const activeAgentLines = [];
-
-  for (const session of active.slice(0, 25)) {
-    const user = await client.users.fetch(session.user_id).catch(() => null);
-    const displayName = String(
-      user?.globalName || user?.username || session.user_id
-    )
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 80);
-
-    const statusText = session.paused_at
-      ? `☕ En pause depuis <t:${unix(session.paused_at)}:R>`
-      : `🟢 En service depuis <t:${unix(session.started_at)}:R>`;
-
-    activeAgentLines.push(
-      `**${activeAgentLines.length + 1}. ${displayName}** — <@${session.user_id}>\n` +
-      `└ ${statusText}`
-    );
-  }
+async function buildHighCommandPanel(client) {
+  const active = await getActiveAttendances();
 
   const embed = new EmbedBuilder()
-    .setColor(active.length ? 0x992d22 : 0x5865f2)
-    .setAuthor({ name: DEPARTMENT_NAME })
-    .setTitle("🛡️ CENTRE D’ADMINISTRATION DES PRÉSENCES")
+    .setColor(0x992d22)
+    .setAuthor({
+      name: "HARMONY POLICE DEPARTMENT",
+    })
+    .setTitle("🛡️ Administration des présences")
     .setDescription(
       active.length
         ? [
             `**${active.length} session(s) actuellement ouverte(s).**`,
             "",
-            "### 👮 Agents actuellement connectés",
-            activeAgentLines.join("\n\n"),
-            "",
-            "### ⚙️ Action administrative",
-            "Choisis l’agent dans le menu ci-dessous, puis confirme la fin forcée de son service.",
-            "⚠️ Toute fin forcée est enregistrée dans les logs administratifs.",
+            "Sélectionne un agent, puis confirme la fin forcée de son service.",
           ].join("\n")
         : "Aucune session active à administrer."
     )
     .setFooter({
-      text: `${DEPARTMENT_NAME} • Accès réservé au High Command • Liste actualisée`,
+      text: "Accès réservé au High Command",
     })
     .setTimestamp();
 
@@ -446,21 +397,27 @@ async function buildHighCommandPanel(client, activeOverride = null) {
     return {
       embeds: [embed],
       components: [],
-      allowedMentions: { parse: [] },
+      allowedMentions: {
+        parse: [],
+      },
     };
   }
 
   const selectMenu = new StringSelectMenuBuilder()
     .setCustomId("attendance:force-select")
-    .setPlaceholder(`Sélectionner un agent (${active.length} disponible${active.length > 1 ? "s" : ""})`)
+    .setPlaceholder("Sélectionner un agent en service")
     .setMinValues(1)
     .setMaxValues(1);
 
   for (const session of active.slice(0, 25)) {
-    const user = await client.users.fetch(session.user_id).catch(() => null);
+    const member = await guild.members.fetch(session.user_id).catch(() => null);
+    const user = member?.user || await client.users.fetch(session.user_id).catch(() => null);
 
     const label = String(
-      user?.globalName || user?.username || session.user_id
+      member?.displayName ||
+      user?.globalName ||
+      user?.username ||
+      session.user_id
     )
       .replace(/\s+/g, " ")
       .trim()
@@ -470,37 +427,42 @@ async function buildHighCommandPanel(client, activeOverride = null) {
       new StringSelectMenuOptionBuilder()
         .setLabel(label)
         .setDescription(
-          (session.paused_at ? "En pause" : "En service") +
-          ` • début ${new Date(session.started_at).toLocaleString("fr-FR", {
-            timeZone: "Europe/Brussels",
-            hour: "2-digit",
-            minute: "2-digit",
-          })}`
+          session.paused_at
+            ? "Agent actuellement en pause"
+            : "Agent actuellement en service"
         )
-        .setValue(String(session.user_id))
-        .setEmoji(session.paused_at ? "☕" : "🟢")
+        .setValue(session.user_id)
+        .setEmoji(
+          session.paused_at
+            ? "☕"
+            : "🟢"
+        )
     );
   }
 
-  const selectRow = new ActionRowBuilder().addComponents(selectMenu);
+  const selectRow =
+    new ActionRowBuilder().addComponents(
+      selectMenu
+    );
 
-  const confirmRow = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId("attendance:force-confirm")
-      .setLabel("Forcer la fin du service")
-      .setEmoji("🛑")
-      .setStyle(ButtonStyle.Danger),
-    new ButtonBuilder()
-      .setCustomId("attendance:admin-refresh")
-      .setLabel("Actualiser la liste")
-      .setEmoji("🔄")
-      .setStyle(ButtonStyle.Secondary)
-  );
+  const confirmRow =
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("attendance:force-confirm")
+        .setLabel("Forcer la fin du service")
+        .setEmoji("🛑")
+        .setStyle(ButtonStyle.Danger)
+    );
 
   return {
     embeds: [embed],
-    components: [selectRow, confirmRow],
-    allowedMentions: { parse: [] },
+    components: [
+      selectRow,
+      confirmRow,
+    ],
+    allowedMentions: {
+      parse: [],
+    },
   };
 }
 
@@ -574,10 +536,7 @@ async function handleAttendanceButton(interaction, client) {
     return true;
   }
 
-  if (
-    !memberIsPolice(interaction.member) &&
-    !memberIsHighCommand(interaction.member, interaction)
-  ) {
+  if (!memberIsPolice(interaction.member)) {
     await interaction.editReply(
       "❌ Tu dois avoir le rôle Police pour utiliser la présence."
     );
@@ -586,34 +545,6 @@ async function handleAttendanceButton(interaction, client) {
 
   const customIdParts = interaction.customId.split(":");
   const action = customIdParts[1];
-
-  if (action === "admin-refresh") {
-    if (
-      !memberIsHighCommand(
-        interaction.member,
-        interaction
-      )
-    ) {
-      await interaction.editReply(
-        "❌ Cette action est réservée au High Command."
-      );
-      return true;
-    }
-
-    const activeSnapshot = await getActiveAttendances();
-    await refreshAttendancePanel(client, activeSnapshot);
-    const adminPayload = await buildHighCommandPanel(client, activeSnapshot);
-    await interaction.editReply(adminPayload);
-    return true;
-  }
-
-  if (action === "refresh") {
-    await refreshAttendancePanel(client);
-    await interaction.editReply(
-      "✅ Le panneau de présence vient d’être actualisé."
-    );
-    return true;
-  }
 
   if (action === "force-confirm") {
     if (
@@ -821,14 +752,8 @@ async function handleAttendanceButton(interaction, client) {
       return true;
     }
 
-    // Une seule lecture de la base est utilisée pour les deux panneaux.
-    // Ainsi, la liste administrative et le panneau principal affichent
-    // toujours exactement les mêmes agents au même instant.
-    const activeSnapshot = await getActiveAttendances();
-    await refreshAttendancePanel(client, activeSnapshot);
-
     const payload =
-      await buildHighCommandPanel(client, activeSnapshot);
+      await buildHighCommandPanel(client);
 
     await interaction.editReply(payload);
     return true;
@@ -902,7 +827,7 @@ async function handleAttendanceButton(interaction, client) {
           : 0x5865f2
       )
       .setAuthor({
-        name: DEPARTMENT_NAME,
+        name: "HARMONY POLICE DEPARTMENT",
       })
       .setTitle("📊 Mes statistiques de service")
       .setThumbnail(
@@ -957,7 +882,7 @@ async function handleAttendanceButton(interaction, client) {
         }
       )
       .setFooter({
-        text: `${DEPARTMENT_NAME} • Statistiques personnelles`,
+        text: "Harmony Police Department • Statistiques personnelles",
       })
       .setTimestamp();
 
