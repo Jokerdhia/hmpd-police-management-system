@@ -186,35 +186,20 @@ async function buildPanelPayload(client) {
     })
     .setTimestamp();
 
+  // Les boutons personnalisés (début/pause/fin/admin) sont affichés dans
+  // un panneau privé. Un message Discord public ne peut pas avoir des boutons
+  // activés/désactivés différemment pour chaque policier.
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId("attendance:start")
-      .setLabel("Début de service")
-      .setEmoji("🟢")
-      .setStyle(ButtonStyle.Success),
-
-    new ButtonBuilder()
-      .setCustomId("attendance:pause")
-      .setLabel("Pause / Reprendre")
-      .setEmoji("☕")
+      .setCustomId("attendance:controls")
+      .setLabel("Mon espace de service")
+      .setEmoji("👮")
       .setStyle(ButtonStyle.Primary),
-
-    new ButtonBuilder()
-      .setCustomId("attendance:stop")
-      .setLabel("Fin de service")
-      .setEmoji("🔴")
-      .setStyle(ButtonStyle.Danger),
 
     new ButtonBuilder()
       .setCustomId("attendance:status")
       .setLabel("Mes statistiques")
       .setEmoji("📊")
-      .setStyle(ButtonStyle.Secondary),
-
-    new ButtonBuilder()
-      .setCustomId("attendance:admin")
-      .setLabel("Administration")
-      .setEmoji("🛡️")
       .setStyle(ButtonStyle.Secondary)
   );
 
@@ -224,6 +209,87 @@ async function buildPanelPayload(client) {
     allowedMentions: {
       parse: [],
     },
+  };
+}
+
+
+async function buildPersonalControlsPayload(interaction) {
+  const active = await getActiveAttendance(interaction.user.id);
+  const isPaused = Boolean(active?.paused_at);
+  const isHighCommand = memberIsHighCommand(interaction.member, interaction);
+
+  const statusText = !active
+    ? "🔴 Hors service"
+    : isPaused
+      ? `🟡 En pause depuis <t:${unix(active.paused_at)}:R>`
+      : `🟢 En service depuis <t:${unix(active.started_at)}:R>`;
+
+  const embed = new EmbedBuilder()
+    .setColor(!active ? 0x5865f2 : isPaused ? 0xf1c40f : 0x2ecc71)
+    .setAuthor({ name: "HARMONY POLICE DEPARTMENT" })
+    .setTitle("👮 Mon espace de service")
+    .setDescription([
+      `**${statusText}**`,
+      "",
+      active
+        ? "Gère ta session avec les boutons ci-dessous."
+        : "Tu peux commencer ton service avec le bouton vert.",
+    ].join("\n"))
+    .setFooter({
+      text: isHighCommand
+        ? "Accès High Command détecté • Administration disponible"
+        : "Espace personnel • Seul toi peux voir ce panneau",
+    })
+    .setTimestamp();
+
+  const serviceRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("attendance:start")
+      .setLabel(active ? "Déjà en service" : "Début de service")
+      .setEmoji("🟢")
+      .setStyle(active ? ButtonStyle.Secondary : ButtonStyle.Success)
+      .setDisabled(Boolean(active)),
+
+    new ButtonBuilder()
+      .setCustomId("attendance:pause")
+      .setLabel(isPaused ? "Reprendre" : "Mettre en pause")
+      .setEmoji(isPaused ? "▶️" : "☕")
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(!active),
+
+    new ButtonBuilder()
+      .setCustomId("attendance:stop")
+      .setLabel("Fin de service")
+      .setEmoji("🔴")
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(!active),
+
+    new ButtonBuilder()
+      .setCustomId("attendance:status")
+      .setLabel("Mes statistiques")
+      .setEmoji("📊")
+      .setStyle(ButtonStyle.Secondary)
+  );
+
+  const components = [serviceRow];
+
+  // Le bouton Administration n'existe que dans la réponse privée des hauts gradés.
+  if (isHighCommand) {
+    components.push(
+      new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId("attendance:admin")
+          .setLabel("Administration High Command")
+          .setEmoji("🛡️")
+          .setStyle(ButtonStyle.Secondary)
+      )
+    );
+  }
+
+  return {
+    embeds: [embed],
+    components,
+    allowedMentions: { parse: [] },
   };
 }
 
@@ -576,6 +642,12 @@ async function handleAttendanceButton(interaction, client) {
     return true;
   }
 
+  if (action === "controls") {
+    const payload = await buildPersonalControlsPayload(interaction);
+    await interaction.editReply(payload);
+    return true;
+  }
+
   if (action === "admin-refresh") {
     if (!memberIsHighCommand(interaction.member, interaction)) {
       await interaction.editReply(
@@ -701,9 +773,11 @@ async function handleAttendanceButton(interaction, client) {
 
     await refreshAttendancePanel(client);
 
-    await interaction.editReply(
-      `✅ Service commencé à <t:${unix(result.session.started_at)}:t>.`
-    );
+    const payload = await buildPersonalControlsPayload(interaction);
+    await interaction.editReply({
+      content: `✅ Service commencé à <t:${unix(result.session.started_at)}:t>.`,
+      ...payload,
+    });
     return true;
   }
 
@@ -721,14 +795,15 @@ async function handleAttendanceButton(interaction, client) {
     if (current.paused_at) {
       const result = await resumeAttendance(interaction.user.id);
 
-      await interaction.editReply(
-        result.resumed
-          ? "▶️ Service repris. Le compteur est de nouveau actif."
-          : "⚠️ Ton service n'est pas en pause."
-      );
-
       if (result.resumed) {
         await refreshAttendancePanel(client);
+        const payload = await buildPersonalControlsPayload(interaction);
+        await interaction.editReply({
+          content: "▶️ Service repris. Le compteur est de nouveau actif.",
+          ...payload,
+        });
+      } else {
+        await interaction.editReply("⚠️ Ton service n'est pas en pause.");
       }
 
       return true;
@@ -736,14 +811,15 @@ async function handleAttendanceButton(interaction, client) {
 
     const result = await pauseAttendance(interaction.user.id);
 
-    await interaction.editReply(
-      result.paused
-        ? "☕ Pause commencée. Le compteur est temporairement arrêté."
-        : "⚠️ Impossible de mettre ton service en pause."
-    );
-
     if (result.paused) {
       await refreshAttendancePanel(client);
+      const payload = await buildPersonalControlsPayload(interaction);
+      await interaction.editReply({
+        content: "☕ Pause commencée. Le compteur est temporairement arrêté.",
+        ...payload,
+      });
+    } else {
+      await interaction.editReply("⚠️ Impossible de mettre ton service en pause.");
     }
 
     return true;
@@ -776,9 +852,11 @@ async function handleAttendanceButton(interaction, client) {
 
     await refreshAttendancePanel(client);
 
-    await interaction.editReply(
-      `✅ Service terminé. Durée : **${formatDuration(result.session.duration_seconds)}**.`
-    );
+    const payload = await buildPersonalControlsPayload(interaction);
+    await interaction.editReply({
+      content: `✅ Service terminé. Durée : **${formatDuration(result.session.duration_seconds)}**.`,
+      ...payload,
+    });
     return true;
   }
 
