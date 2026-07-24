@@ -1,0 +1,27 @@
+CORRECTION PROFESSIONNELLE DU SYSTÈME DE PRÉSENCE
+
+1. Correction de l'erreur "Impossible de traiter la présence"
+   - La variable guild était utilisée sans être définie dans le panneau Administration.
+   - Le serveur Discord est maintenant transmis correctement à la fonction.
+
+2. Noms identiques partout
+   - Le panneau et le menu déroulant utilisent maintenant member.displayName.
+   - Exemple : #133 | ZIZOU CAPILO est affiché en haut et dans le menu.
+   - Un repli sécurisé utilise globalName, username puis l'identifiant Discord.
+
+3. Liste administrative améliorée
+   - Tous les agents actifs sont affichés dans l'embed.
+   - Statut en service ou en pause.
+   - Temps relatif depuis le début du service ou de la pause.
+   - Le menu est généré depuis exactement la même liste.
+
+4. Bouton d'actualisation
+   - Ajout du bouton "Actualiser la liste" dans le panneau Administration.
+
+5. Accès High Command corrigé
+   - Un administrateur/High Command peut ouvrir l'administration même s'il ne possède pas directement ROLE_POLICE.
+
+Installation :
+- Remplacer les fichiers de l'ancienne version par ceux de cette archive.
+- Redémarrer le bot.
+- Il n'est pas nécessaire de redéployer les commandes slash pour cette correction.

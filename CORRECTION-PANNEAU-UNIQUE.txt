@@ -1,0 +1,21 @@
+HMPD POINTS BOT — CORRECTION PANNEAU UNIQUE
+
+Correction principale :
+- Les boutons Pause, Reprendre, Fin de service, Statistiques et Administration
+  modifient maintenant le même message privé.
+- Aucun nouveau message éphémère n'est créé à chaque clic.
+
+Améliorations :
+- Le clic depuis le panneau public ouvre une seule fois l'espace personnel.
+- Les clics suivants utilisent deferUpdate() puis editReply().
+- Le menu Administration reste dans le même panneau privé.
+- Le menu déroulant ne crée plus une nouvelle réponse lors d'une sélection.
+- Les statistiques possèdent un bouton « Retour à mon espace ».
+- Le bouton Administration reste visible uniquement pour le High Command.
+- Les boutons restent activés ou désactivés selon le statut réel du policier.
+
+Installation :
+1. Remplacer les fichiers du projet par ceux de cette archive.
+2. Faire npm install si nécessaire.
+3. Redémarrer le bot.
+4. Il n'est pas nécessaire de redéployer les commandes Discord.

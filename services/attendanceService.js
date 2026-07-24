@@ -29,7 +29,6 @@ const ROLE_HIGH_COMMAND = String(
 ).trim();
 
 const PANEL_SETTING_KEY = "attendance_panel_message_id";
-const forceSelectionByModerator = new Map();
 
 function formatDuration(totalSeconds) {
   const seconds = Math.max(0, Number(totalSeconds) || 0);
@@ -436,7 +435,7 @@ async function sendAttendanceLog(
   }
 }
 
-async function buildHighCommandPanel(client, guild) {
+async function buildHighCommandPanel(client, guild, selectedUserId = null) {
   const active = await getActiveAttendances();
 
   const embed = new EmbedBuilder()
@@ -493,31 +492,45 @@ async function buildHighCommandPanel(client, guild) {
     })
   );
 
-  const agentLines = resolvedSessions.map(({ session, displayName }, index) => {
+  const selectedSession = selectedUserId
+    ? resolvedSessions.find(({ session }) => session.user_id === selectedUserId)
+    : null;
+
+  if (selectedSession) {
+    const { session, displayName } = selectedSession;
     const status = session.paused_at ? "☕ En pause" : "🟢 En service";
     const since = session.paused_at ? session.paused_at : session.started_at;
-    return [
-      `**${index + 1}. ${displayName}**`,
+
+    embed.setDescription([
+      "**Agent sélectionné pour l’action administrative**",
+      "",
+      `👮 **${displayName}**`,
       `└ <@${session.user_id}>`,
       `└ ${status} depuis <t:${unix(since)}:R>`,
-    ].join("\n");
-  }).join("\n\n");
+    ].join("\n"));
+  } else {
+    embed.setDescription([
+      `**${active.length} session(s) actuellement ouverte(s).**`,
+      "",
+      "Sélectionne un policier dans le menu déroulant.",
+      "Après la sélection, seul le policier choisi sera affiché ici.",
+    ].join("\n"));
+  }
 
-  embed.addFields(
-    {
-      name: `👮 Agents actuellement connectés • ${active.length}`,
-      value: agentLines.slice(0, 1024),
-      inline: false,
-    },
-    {
-      name: "⚙️ Action administrative",
-      value: [
-        "Choisis l’agent dans le menu ci-dessous, puis confirme la fin forcée de son service.",
-        "⚠️ Toute fin forcée est enregistrée dans les logs administratifs.",
-      ].join("\n"),
-      inline: false,
-    }
-  );
+  embed.addFields({
+    name: "⚙️ Action administrative",
+    value: selectedSession
+      ? [
+          `✅ **${selectedSession.displayName}** est sélectionné.`,
+          "Clique sur **Forcer la fin du service** pour confirmer.",
+          "⚠️ Cette action sera enregistrée dans les logs administratifs.",
+        ].join("\n")
+      : [
+          "Choisis d’abord un agent dans le menu ci-dessous.",
+          "Le bouton de confirmation restera désactivé tant qu’aucun agent n’est sélectionné.",
+        ].join("\n"),
+    inline: false,
+  });
 
   const selectMenu = new StringSelectMenuBuilder()
     .setCustomId("attendance:force-select")
@@ -536,6 +549,7 @@ async function buildHighCommandPanel(client, guild) {
         .setDescription(description.slice(0, 100))
         .setValue(session.user_id)
         .setEmoji(session.paused_at ? "☕" : "🟢")
+        .setDefault(session.user_id === selectedUserId)
     );
   }
 
@@ -543,10 +557,11 @@ async function buildHighCommandPanel(client, guild) {
 
   const actionRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId("attendance:force-confirm")
+      .setCustomId(selectedSession ? `attendance:force-confirm:${selectedSession.session.user_id}` : "attendance:force-confirm:none")
       .setLabel("Forcer la fin du service")
       .setEmoji("🛑")
-      .setStyle(ButtonStyle.Danger),
+      .setStyle(ButtonStyle.Danger)
+      .setDisabled(!selectedSession),
     new ButtonBuilder()
       .setCustomId("attendance:admin-refresh")
       .setLabel("Actualiser la liste")
@@ -599,18 +614,30 @@ async function handleAttendanceSelect(
     return true;
   }
 
-  forceSelectionByModerator.set(
-    interaction.user.id,
-    {
-      targetUserId,
-      expiresAt: Date.now() + 5 * 60 * 1000,
-    }
+  const activeSession = await getActiveAttendance(targetUserId);
+
+  if (!activeSession) {
+    const payload = await buildHighCommandPanel(
+      interaction.client,
+      interaction.guild
+    );
+    await interaction.editReply({
+      content: "⚠️ Ce policier n’a plus de service actif. La liste a été actualisée.",
+      ...payload,
+    });
+    return true;
+  }
+
+  const payload = await buildHighCommandPanel(
+    interaction.client,
+    interaction.guild,
+    targetUserId
   );
 
-  await interaction.editReply(
-    `✅ <@${targetUserId}> sélectionné.\n` +
-    "Clique maintenant sur **Forcer la fin du service**."
-  );
+  await interaction.editReply({
+    content: null,
+    ...payload,
+  });
 
   return true;
 }
@@ -683,31 +710,16 @@ async function handleAttendanceButton(interaction, client) {
       return true;
     }
 
-    const selection =
-      forceSelectionByModerator.get(
-        interaction.user.id
-      );
+    const targetUserId = String(customIdParts[2] || "").trim();
 
-    if (
-      !selection ||
-      selection.expiresAt < Date.now()
-    ) {
-      forceSelectionByModerator.delete(
-        interaction.user.id
-      );
-
-      await interaction.editReply(
-        "⚠️ Sélectionne d'abord un agent dans le menu."
-      );
+    if (!/^\d{16,22}$/.test(targetUserId)) {
+      const payload = await buildHighCommandPanel(client, interaction.guild);
+      await interaction.editReply({
+        content: "⚠️ Sélectionne d’abord un agent dans le menu.",
+        ...payload,
+      });
       return true;
     }
-
-    const targetUserId =
-      selection.targetUserId;
-
-    forceSelectionByModerator.delete(
-      interaction.user.id
-    );
 
     const result = await stopAttendance(
       targetUserId,
@@ -724,12 +736,17 @@ async function handleAttendanceButton(interaction, client) {
       return true;
     }
 
-    await interaction.editReply(
-      `✅ Le service de <@${targetUserId}> a été terminé de force.\n` +
-      `⏱️ Temps comptabilisé : **${formatDuration(
-        result.session.duration_seconds
-      )}**.`
+    const refreshedAdminPayload = await buildHighCommandPanel(
+      client,
+      interaction.guild
     );
+
+    await interaction.editReply({
+      content:
+        `✅ Le service de <@${targetUserId}> a été terminé de force.\n` +
+        `⏱️ Temps comptabilisé : **${formatDuration(result.session.duration_seconds)}**.`,
+      ...refreshedAdminPayload,
+    });
 
     const forceResults =
       await Promise.allSettled([

@@ -1,0 +1,13 @@
+HMPD POINTS BOT — CONTRÔLES DE PRÉSENCE PERSONNALISÉS
+
+Améliorations :
+- Le bouton Administration a été retiré du panneau public.
+- Il apparaît uniquement dans le panneau privé des membres High Command.
+- Le panneau public contient maintenant « Mon espace de service » et « Mes statistiques ».
+- Dans l'espace privé, « Début de service » devient gris et désactivé quand l'agent est déjà en service.
+- Pause et Fin de service sont désactivés quand aucune session n'est active.
+- Le libellé Pause devient « Reprendre » lorsque l'agent est en pause.
+- Après chaque action, le panneau privé se met à jour automatiquement.
+
+Pourquoi ce fonctionnement :
+Discord ne permet pas de modifier les boutons d'un même message public différemment pour chaque utilisateur. Le panneau privé garantit donc que chaque policier voit les bons boutons selon son propre statut et que l'administration reste invisible aux non-hauts gradés.

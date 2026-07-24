@@ -1,0 +1,21 @@
+MIGRATION HMPD VERS NEON POSTGRESQL
+===================================
+
+1. Dans Neon, copiez la chaîne de connexion "Pooled connection".
+2. Dans Render > Environment, ajoutez :
+
+   DATABASE_URL=postgresql://...
+
+3. Supprimez la variable DATABASE_PATH de Render.
+4. Envoyez ce projet sur GitHub.
+5. Dans Render : Manual Deploy > Clear build cache & deploy.
+
+Au premier démarrage, les tables sont créées automatiquement.
+Les nouvelles données resteront dans Neon après les redéploiements Render.
+
+IMPORTANT
+---------
+- Ne publiez jamais DATABASE_URL ni le mot de passe Neon.
+- L'ancienne base hmpd.sqlite n'est pas migrée automatiquement.
+- Les policiers actuels seront recréés automatiquement par la synchronisation Discord.
+- Les anciens points SQLite ne seront pas récupérés sauf migration séparée.

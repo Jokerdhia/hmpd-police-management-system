@@ -1,0 +1,30 @@
+HMPD POINTS BOT — AMÉLIORATION PROGRESSION DES GRADES
+
+Nouveautés :
+- Barème professionnel visible directement sur le tableau de bord.
+- 12 grades affichés dans l'ordre officiel HMPD.
+- Profil policier avec barre de progression vers le prochain grade.
+- Affichage des points actuels, du seuil requis et des points restants.
+- Gestion spéciale du grade maximum « Chief Police ».
+- Barème identique entre le bot Discord et le dashboard.
+- Mise en page responsive pour ordinateur, tablette et mobile.
+
+Barème configuré :
+Academy: 0
+Officer: 10
+Senior Officer: 25
+Sergeant: 45
+First Sergeant: 70
+Lieutenant: 100
+Captain: 140
+Commander: 190
+Deputy Chief: 250
+Assistant Chief: 320
+Vice Chief: 400
+Chief Police: 500
+
+Variables .env nécessaires :
+ROLE_DEPUTY_CHIEF
+ROLE_ASSISTANT_CHIEF
+ROLE_VICE_CHIEF
+ROLE_CHIEF_POLICE
