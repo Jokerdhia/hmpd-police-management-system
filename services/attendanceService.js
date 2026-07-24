@@ -370,7 +370,7 @@ async function sendAttendanceLog(
   }
 }
 
-async function buildHighCommandPanel(client) {
+async function buildHighCommandPanel(client, guild) {
   const active = await getActiveAttendances();
 
   const embed = new EmbedBuilder()
@@ -378,91 +378,120 @@ async function buildHighCommandPanel(client) {
     .setAuthor({
       name: "HARMONY POLICE DEPARTMENT",
     })
-    .setTitle("🛡️ Administration des présences")
+    .setTitle("🛡️ Centre d’administration des présences")
     .setDescription(
       active.length
         ? [
             `**${active.length} session(s) actuellement ouverte(s).**`,
             "",
-            "Sélectionne un agent, puis confirme la fin forcée de son service.",
+            "La liste ci-dessous et le menu déroulant utilisent exactement les mêmes noms Discord.",
           ].join("\n")
         : "Aucune session active à administrer."
     )
     .setFooter({
-      text: "Accès réservé au High Command",
+      text: "Accès réservé au High Command • Liste actualisée",
     })
     .setTimestamp();
 
   if (!active.length) {
+    const refreshRow = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("attendance:admin-refresh")
+        .setLabel("Actualiser la liste")
+        .setEmoji("🔄")
+        .setStyle(ButtonStyle.Secondary)
+    );
+
     return {
       embeds: [embed],
-      components: [],
-      allowedMentions: {
-        parse: [],
-      },
+      components: [refreshRow],
+      allowedMentions: { parse: [] },
     };
   }
 
+  const visibleSessions = active.slice(0, 25);
+  const resolvedSessions = await Promise.all(
+    visibleSessions.map(async (session) => {
+      const member = guild
+        ? await guild.members.fetch(session.user_id).catch(() => null)
+        : null;
+      const user = member?.user || await client.users.fetch(session.user_id).catch(() => null);
+      const displayName = String(
+        member?.displayName ||
+        user?.globalName ||
+        user?.username ||
+        session.user_id
+      ).replace(/\s+/g, " ").trim();
+
+      return { session, member, user, displayName };
+    })
+  );
+
+  const agentLines = resolvedSessions.map(({ session, displayName }, index) => {
+    const status = session.paused_at ? "☕ En pause" : "🟢 En service";
+    const since = session.paused_at ? session.paused_at : session.started_at;
+    return [
+      `**${index + 1}. ${displayName}**`,
+      `└ <@${session.user_id}>`,
+      `└ ${status} depuis <t:${unix(since)}:R>`,
+    ].join("\n");
+  }).join("\n\n");
+
+  embed.addFields(
+    {
+      name: `👮 Agents actuellement connectés • ${active.length}`,
+      value: agentLines.slice(0, 1024),
+      inline: false,
+    },
+    {
+      name: "⚙️ Action administrative",
+      value: [
+        "Choisis l’agent dans le menu ci-dessous, puis confirme la fin forcée de son service.",
+        "⚠️ Toute fin forcée est enregistrée dans les logs administratifs.",
+      ].join("\n"),
+      inline: false,
+    }
+  );
+
   const selectMenu = new StringSelectMenuBuilder()
     .setCustomId("attendance:force-select")
-    .setPlaceholder("Sélectionner un agent en service")
+    .setPlaceholder(`Sélectionner un agent (${visibleSessions.length} disponible${visibleSessions.length > 1 ? "s" : ""})`)
     .setMinValues(1)
     .setMaxValues(1);
 
-  for (const session of active.slice(0, 25)) {
-    const member = await guild.members.fetch(session.user_id).catch(() => null);
-    const user = member?.user || await client.users.fetch(session.user_id).catch(() => null);
-
-    const label = String(
-      member?.displayName ||
-      user?.globalName ||
-      user?.username ||
-      session.user_id
-    )
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 90);
+  for (const { session, displayName } of resolvedSessions) {
+    const description = session.paused_at
+      ? `En pause depuis ${new Date(session.paused_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`
+      : `En service depuis ${new Date(session.started_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}`;
 
     selectMenu.addOptions(
       new StringSelectMenuOptionBuilder()
-        .setLabel(label)
-        .setDescription(
-          session.paused_at
-            ? "Agent actuellement en pause"
-            : "Agent actuellement en service"
-        )
+        .setLabel(displayName.slice(0, 100))
+        .setDescription(description.slice(0, 100))
         .setValue(session.user_id)
-        .setEmoji(
-          session.paused_at
-            ? "☕"
-            : "🟢"
-        )
+        .setEmoji(session.paused_at ? "☕" : "🟢")
     );
   }
 
-  const selectRow =
-    new ActionRowBuilder().addComponents(
-      selectMenu
-    );
+  const selectRow = new ActionRowBuilder().addComponents(selectMenu);
 
-  const confirmRow =
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("attendance:force-confirm")
-        .setLabel("Forcer la fin du service")
-        .setEmoji("🛑")
-        .setStyle(ButtonStyle.Danger)
-    );
+  const actionRow = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId("attendance:force-confirm")
+      .setLabel("Forcer la fin du service")
+      .setEmoji("🛑")
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId("attendance:admin-refresh")
+      .setLabel("Actualiser la liste")
+      .setEmoji("🔄")
+      .setStyle(ButtonStyle.Secondary)
+  );
 
   return {
     embeds: [embed],
-    components: [
-      selectRow,
-      confirmRow,
-    ],
-    allowedMentions: {
-      parse: [],
-    },
+    components: [selectRow, actionRow],
+    allowedMentions: { parse: [] },
   };
 }
 
@@ -536,15 +565,29 @@ async function handleAttendanceButton(interaction, client) {
     return true;
   }
 
-  if (!memberIsPolice(interaction.member)) {
+  const customIdParts = interaction.customId.split(":");
+  const action = customIdParts[1];
+  const isAdminAction = action === "admin" || action === "admin-refresh" || action === "force-confirm";
+
+  if (!memberIsPolice(interaction.member) && !isAdminAction) {
     await interaction.editReply(
       "❌ Tu dois avoir le rôle Police pour utiliser la présence."
     );
     return true;
   }
 
-  const customIdParts = interaction.customId.split(":");
-  const action = customIdParts[1];
+  if (action === "admin-refresh") {
+    if (!memberIsHighCommand(interaction.member, interaction)) {
+      await interaction.editReply(
+        "❌ Cette action est réservée au High Command."
+      );
+      return true;
+    }
+
+    const payload = await buildHighCommandPanel(client, interaction.guild);
+    await interaction.editReply(payload);
+    return true;
+  }
 
   if (action === "force-confirm") {
     if (
@@ -753,7 +796,7 @@ async function handleAttendanceButton(interaction, client) {
     }
 
     const payload =
-      await buildHighCommandPanel(client);
+      await buildHighCommandPanel(client, interaction.guild);
 
     await interaction.editReply(payload);
     return true;
