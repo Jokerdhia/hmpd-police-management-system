@@ -71,8 +71,10 @@ async function fetchTextChannel(client, channelId) {
   return channel?.isTextBased?.() ? channel : null;
 }
 
-async function buildPanelPayload(client) {
-  const active = await getActiveAttendances();
+async function buildPanelPayload(client, activeOverride = null) {
+  const active = Array.isArray(activeOverride)
+    ? activeOverride
+    : await getActiveAttendances();
   const weekly = await getAttendanceTotals("week", 3);
 
   const working = active.filter(
@@ -248,7 +250,7 @@ async function buildPanelPayload(client) {
   };
 }
 
-async function ensureAttendancePanel(client, forceNew = false) {
+async function ensureAttendancePanel(client, forceNew = false, activeOverride = null) {
   if (!ATTENDANCE_CHANNEL_ID) {
     console.warn("⚠️ ATTENDANCE_CHANNEL_ID absent : panneau de présence désactivé.");
     return null;
@@ -256,7 +258,7 @@ async function ensureAttendancePanel(client, forceNew = false) {
   const channel = await fetchTextChannel(client, ATTENDANCE_CHANNEL_ID);
   if (!channel) throw new Error("Salon de présence introuvable ou non textuel.");
 
-  const payload = await buildPanelPayload(client);
+  const payload = await buildPanelPayload(client, activeOverride);
   let message = null;
   if (!forceNew) {
     const messageId = await getBotSetting(PANEL_SETTING_KEY);
@@ -271,8 +273,8 @@ async function ensureAttendancePanel(client, forceNew = false) {
   return message;
 }
 
-async function refreshAttendancePanel(client) {
-  return ensureAttendancePanel(client, false).catch((error) => {
+async function refreshAttendancePanel(client, activeOverride = null) {
+  return ensureAttendancePanel(client, false, activeOverride).catch((error) => {
     console.error("❌ Actualisation du panneau de présence impossible :", error?.message || error);
     return null;
   });
@@ -391,8 +393,10 @@ async function sendAttendanceLog(
   }
 }
 
-async function buildHighCommandPanel(client) {
-  const active = await getActiveAttendances();
+async function buildHighCommandPanel(client, activeOverride = null) {
+  const active = Array.isArray(activeOverride)
+    ? activeOverride
+    : await getActiveAttendances();
 
   const activeAgentLines = [];
 
@@ -485,7 +489,12 @@ async function buildHighCommandPanel(client) {
       .setCustomId("attendance:force-confirm")
       .setLabel("Forcer la fin du service")
       .setEmoji("🛑")
-      .setStyle(ButtonStyle.Danger)
+      .setStyle(ButtonStyle.Danger),
+    new ButtonBuilder()
+      .setCustomId("attendance:admin-refresh")
+      .setLabel("Actualiser la liste")
+      .setEmoji("🔄")
+      .setStyle(ButtonStyle.Secondary)
   );
 
   return {
@@ -577,6 +586,26 @@ async function handleAttendanceButton(interaction, client) {
 
   const customIdParts = interaction.customId.split(":");
   const action = customIdParts[1];
+
+  if (action === "admin-refresh") {
+    if (
+      !memberIsHighCommand(
+        interaction.member,
+        interaction
+      )
+    ) {
+      await interaction.editReply(
+        "❌ Cette action est réservée au High Command."
+      );
+      return true;
+    }
+
+    const activeSnapshot = await getActiveAttendances();
+    await refreshAttendancePanel(client, activeSnapshot);
+    const adminPayload = await buildHighCommandPanel(client, activeSnapshot);
+    await interaction.editReply(adminPayload);
+    return true;
+  }
 
   if (action === "refresh") {
     await refreshAttendancePanel(client);
@@ -792,8 +821,14 @@ async function handleAttendanceButton(interaction, client) {
       return true;
     }
 
+    // Une seule lecture de la base est utilisée pour les deux panneaux.
+    // Ainsi, la liste administrative et le panneau principal affichent
+    // toujours exactement les mêmes agents au même instant.
+    const activeSnapshot = await getActiveAttendances();
+    await refreshAttendancePanel(client, activeSnapshot);
+
     const payload =
-      await buildHighCommandPanel(client);
+      await buildHighCommandPanel(client, activeSnapshot);
 
     await interaction.editReply(payload);
     return true;
