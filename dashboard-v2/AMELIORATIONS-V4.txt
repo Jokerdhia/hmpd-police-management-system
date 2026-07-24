@@ -1,0 +1,13 @@
+HMPD MDT V4 - AMELIORATIONS
+
+Ajouts :
+- Affichage en temps réel du nombre de policiers en service sur le tableau de bord.
+- Total des heures de la semaine sur la page principale.
+- Export CSV professionnel de l effectif avec grade, points et heures.
+- Mode clair / sombre mémorisé dans le navigateur.
+- Distinctions automatiques selon les heures, points et grade.
+- Alerte de promotion lorsqu un policier est à 10 points ou moins du grade suivant.
+- Interface responsive améliorée.
+
+Aucune nouvelle variable Render n est nécessaire.
+Après déploiement, faire un redémarrage complet du service et vider le cache du navigateur avec Ctrl+F5.
