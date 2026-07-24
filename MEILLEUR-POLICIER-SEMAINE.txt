@@ -1,0 +1,14 @@
+MEILLEUR POLICIER DE LA SEMAINE
+================================
+
+Le tableau de bord calcule maintenant automatiquement le meilleur policier
+de la semaine à partir de l’historique des points.
+
+Calcul :
+- points ajoutés pendant la semaine ;
+- moins les points retirés pendant la semaine ;
+- le policier avec le meilleur total net positif est affiché.
+
+La semaine commence le lundi à 00:00, heure de Bruxelles.
+Aucun cron ni redémarrage n’est nécessaire : le résultat change automatiquement
+au début de chaque nouvelle semaine et à chaque actualisation du dashboard.

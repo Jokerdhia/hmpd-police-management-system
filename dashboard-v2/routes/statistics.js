@@ -1,5 +1,7 @@
 const express = require("express");
 
+const { getWeeklyBestOfficer } = require("../dashboardDatabase");
+
 const {
   listOfficers,
 } = require("../services/officerService");
@@ -14,7 +16,10 @@ const router = express.Router();
 
 router.get("/", async (request, response, next) => {
   try {
-    const officers = await listOfficers();
+    const [officers, weeklyWinner] = await Promise.all([
+      listOfficers(),
+      getWeeklyBestOfficer(),
+    ]);
 
     const totalPoints = officers.reduce(
       (total, officer) => total + (Number(officer.points) || 0),
@@ -49,15 +54,20 @@ router.get("/", async (request, response, next) => {
       }
     }
 
-    const highestOfficer = officers.reduce(
-      (highest, officer) => {
-        if (!highest) return officer;
-        return Number(officer.points) > Number(highest.points)
-          ? officer
-          : highest;
-      },
-      null
-    );
+    const weeklyOfficer = weeklyWinner.user_id
+      ? officers.find(
+          (officer) => String(officer.user_id) === String(weeklyWinner.user_id)
+        ) || null
+      : null;
+
+    const weeklyBestOfficer = weeklyOfficer
+      ? {
+          ...weeklyOfficer,
+          weekly_points: weeklyWinner.weekly_points,
+          points_added: weeklyWinner.points_added,
+          points_removed: weeklyWinner.points_removed,
+        }
+      : null;
 
     return response.status(200).json({
       success: true,
@@ -65,7 +75,11 @@ router.get("/", async (request, response, next) => {
         officers: officers.length,
         totalPoints,
         averagePoints,
-        highestOfficer,
+        weeklyBestOfficer,
+        weeklyPeriod: {
+          startsAt: weeklyWinner.starts_at,
+          endsAt: weeklyWinner.ends_at,
+        },
         gradeStatistics,
         gradeRequirements: getPublicGradeRequirements(),
       },

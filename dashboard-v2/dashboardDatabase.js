@@ -104,5 +104,45 @@ async function getOfficerAttendanceTotal(userId){
   return {total_seconds:Number(row.total_seconds||0),sessions:Number(row.sessions||0)};
 }
 
+async function getWeeklyBestOfficer(){
+  await ready;
+  const result=await pool.query(`
+    WITH period AS (
+      SELECT
+        (date_trunc('week', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels') AT TIME ZONE 'Europe/Brussels') AS starts_at,
+        ((date_trunc('week', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels') + interval '7 days') AT TIME ZONE 'Europe/Brussels') AS ends_at
+    ), weekly_scores AS (
+      SELECT
+        user_id,
+        SUM(CASE WHEN action='add' THEN amount WHEN action='remove' THEN -amount ELSE 0 END)::bigint AS weekly_points,
+        SUM(CASE WHEN action='add' THEN amount ELSE 0 END)::bigint AS points_added,
+        SUM(CASE WHEN action='remove' THEN amount ELSE 0 END)::bigint AS points_removed
+      FROM points_history, period
+      WHERE created_at >= period.starts_at AND created_at < period.ends_at
+      GROUP BY user_id
+    )
+    SELECT w.user_id,w.weekly_points,w.points_added,w.points_removed,p.starts_at,p.ends_at
+    FROM weekly_scores w CROSS JOIN period p
+    WHERE w.weekly_points > 0
+    ORDER BY w.weekly_points DESC,w.points_added DESC,w.user_id ASC
+    LIMIT 1`);
+  if(result.rows.length){
+    const row=result.rows[0];
+    return {
+      user_id:String(row.user_id),
+      weekly_points:Number(row.weekly_points||0),
+      points_added:Number(row.points_added||0),
+      points_removed:Number(row.points_removed||0),
+      starts_at:row.starts_at,
+      ends_at:row.ends_at,
+    };
+  }
+  const period=await pool.query(`
+    SELECT
+      (date_trunc('week', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels') AT TIME ZONE 'Europe/Brussels') AS starts_at,
+      ((date_trunc('week', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels') + interval '7 days') AT TIME ZONE 'Europe/Brussels') AS ends_at`);
+  return {user_id:null,weekly_points:0,points_added:0,points_removed:0,...period.rows[0]};
+}
+
 async function closeDatabase(){await pool.end()}
-module.exports={listNotes,addNote,deleteNote,listSanctions,addSanction,updateSanctionStatus,deleteSanction,listActivity,listOfficerActivity,getAttendanceSessions,getAttendanceActive,getAttendanceTotalsDashboard,getAttendanceDaily,getOfficerAttendanceTotal,closeDatabase};
+module.exports={listNotes,addNote,deleteNote,listSanctions,addSanction,updateSanctionStatus,deleteSanction,listActivity,listOfficerActivity,getAttendanceSessions,getAttendanceActive,getAttendanceTotalsDashboard,getAttendanceDaily,getOfficerAttendanceTotal,getWeeklyBestOfficer,closeDatabase};
