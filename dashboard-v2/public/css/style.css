@@ -242,3 +242,32 @@ tbody tr:last-child td{border-bottom:0}
     width:92px;min-width:92px;max-width:92px;font-size:11px;
   }
 }
+
+
+/* Sidebar uniforme + logo Harmony Police */
+.brand-mark{
+  overflow:hidden;
+  padding:3px;
+  background:linear-gradient(145deg,#07162a,#0d2b4f) !important;
+  border:1px solid rgba(112,183,255,.45);
+}
+.brand-mark img{
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  display:block;
+  filter:drop-shadow(0 0 8px rgba(64,170,255,.42));
+}
+.nav-item{
+  background:linear-gradient(145deg,rgba(17,38,66,.88),rgba(9,24,44,.88));
+  border-color:rgba(64,101,145,.34);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.025);
+}
+.nav-item:hover{
+  background:linear-gradient(145deg,rgba(23,52,89,.96),rgba(12,31,57,.96));
+  border-color:rgba(112,183,255,.32);
+}
+.nav-item.active{
+  background:linear-gradient(135deg,#347ff0,#296bd3);
+  border-color:rgba(151,203,255,.58);
+}
