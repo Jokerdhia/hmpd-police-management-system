@@ -2,11 +2,27 @@ const express=require("express");
 const {getAttendanceSessions,getAttendanceActive,getAttendanceTotalsDashboard,getAttendanceDaily}=require("../dashboardDatabase");
 const {listOfficers}=require("../services/officerService");
 const {requireHighCommand,getModeratorId}=require("../auth/auth");
-const {stopAttendance,removeAttendanceTime}=require("../../database");
+const {stopAttendance,pauseAttendance,removeAttendanceTime}=require("../../database");
 const {sendChannelMessage}=require("../services/discordService");
 const router=express.Router();
 function getLogChannelId(){return String(process.env.ATTENDANCE_LOG_CHANNEL_ID||"").trim()}
 function getRemarkChannelId(){return String(process.env.ATTENDANCE_REMARK_CHANNEL_ID||process.env.REMARK_CHANNEL_ID||"").trim()}
+function getForcedEndPenaltySeconds(){
+  const raw=Number(process.env.FORCED_END_PENALTY_HOURS??5);
+  const hours=Number.isFinite(raw)?Math.min(Math.max(raw,0),24):5;
+  return Math.round(hours*3600);
+}
+function getForcedPausePenaltySeconds(){
+  const raw=Number(process.env.FORCED_PAUSE_PENALTY_HOURS??1);
+  const hours=Number.isFinite(raw)?Math.min(Math.max(raw,0),12):1;
+  return Math.round(hours*3600);
+}
+function formatDurationAr(secondsValue){
+  const total=Math.max(0,Number(secondsValue)||0),hours=Math.floor(total/3600),minutes=Math.floor((total%3600)/60);
+  if(hours&&minutes)return `${hours} ساعة و${minutes} دقيقة`;
+  if(hours)return `${hours} ساعة`;
+  return `${minutes} دقيقة`;
+}
 function seconds(v){return Math.max(0,Number(v)||0)}
 function liveSeconds(s){const start=new Date(s.started_at).getTime();const end=s.paused_at?new Date(s.paused_at).getTime():Date.now();return Number.isFinite(start)&&Number.isFinite(end)?Math.max(0,Math.floor((end-start)/1000)-seconds(s.paused_seconds)):0}
 function mapById(officers){return new Map((officers||[]).map(o=>[String(o.user_id),o]))}
@@ -18,7 +34,7 @@ router.get("/overview",async(req,res,next)=>{try{
   const rows=officers.map(o=>{const a=activeMap.get(String(o.user_id));return {...o,attendance_status:!a?"offline":a.paused_at?"paused":"active",session_seconds:a?liveSeconds(a):0,started_at:a?.started_at||null,paused_at:a?.paused_at||null,today_seconds:seconds(dayMap.get(String(o.user_id))?.total_seconds),week_seconds:seconds(weekMap.get(String(o.user_id))?.total_seconds),month_seconds:seconds(monthMap.get(String(o.user_id))?.total_seconds),week_sessions:Number(weekMap.get(String(o.user_id))?.sessions||0)}});
   const activeRows=active.map(x=>enrich({...x,session_seconds:liveSeconds(x)},map));
   const totalToday=day.reduce((a,x)=>a+seconds(x.total_seconds),0),totalWeek=week.reduce((a,x)=>a+seconds(x.total_seconds),0),totalMonth=month.reduce((a,x)=>a+seconds(x.total_seconds),0);
-  res.json({success:true,summary:{active:active.filter(x=>!x.paused_at).length,paused:active.filter(x=>x.paused_at).length,offline:Math.max(officers.length-active.length,0),totalToday,totalWeek,totalMonth,officers:officers.length},officers:rows,active:activeRows,rankings:{day:day.slice(0,10).map(x=>enrich(x,map)),week:week.slice(0,10).map(x=>enrich(x,map)),month:month.slice(0,10).map(x=>enrich(x,map))},history:history.map(x=>enrich(x,map)),daily,permissions:{canForceStop:Boolean(req.session?.user?.isHighCommand)}});
+  res.json({success:true,summary:{active:active.filter(x=>!x.paused_at).length,paused:active.filter(x=>x.paused_at).length,offline:Math.max(officers.length-active.length,0),totalToday,totalWeek,totalMonth,officers:officers.length,forcedEndPenaltySeconds:getForcedEndPenaltySeconds(),forcedPausePenaltySeconds:getForcedPausePenaltySeconds()},officers:rows,active:activeRows,rankings:{day:day.slice(0,10).map(x=>enrich(x,map)),week:week.slice(0,10).map(x=>enrich(x,map)),month:month.slice(0,10).map(x=>enrich(x,map))},history:history.map(x=>enrich(x,map)),daily,permissions:{canForceStop:Boolean(req.session?.user?.isHighCommand)}});
 }catch(e){next(e)}});
 router.post("/:userId/force-stop",requireHighCommand,async(req,res,next)=>{try{
   const userId=String(req.params.userId||"").trim();if(!/^\d{16,22}$/.test(userId)){const e=new Error("Identifiant invalide.");e.status=400;e.publicMessage=e.message;throw e}
@@ -28,12 +44,56 @@ router.post("/:userId/force-stop",requireHighCommand,async(req,res,next)=>{try{
   if(!remarkChannelId){const e=new Error("Le salon de remarques n’est pas configuré. Ajoute ATTENDANCE_REMARK_CHANNEL_ID dans Render puis redéploie le service.");e.status=503;e.publicMessage=e.message;throw e}
   const moderatorId=getModeratorId(req);const result=await stopAttendance(userId,moderatorId,"forced_by_dashboard");
   if(!result.stopped)return res.status(409).json({success:false,message:"Ce policier n'a plus de service actif."});
+  const penaltyRequestedSeconds=getForcedEndPenaltySeconds();
+  let penaltyRemovedSeconds=0,penaltyError=null;
+  if(penaltyRequestedSeconds>0){
+    try{
+      const penalty=await removeAttendanceTime({userId,seconds:penaltyRequestedSeconds,reason:`Pénalité automatique — oubli de fin de service : ${remark}`,moderatorId});
+      penaltyRemovedSeconds=Number(penalty.removedSeconds||0);
+    }catch(err){
+      if(Number(err?.status)!==409){penaltyError=err?.message||String(err);console.error("Pénalité fin forcée:",penaltyError)}
+    }
+  }
   const logChannelId=getLogChannelId();
-  if(logChannelId){await sendChannelMessage(logChannelId,{embeds:[{color:10038562,title:"🛑 RAPPORT DE SERVICE — FIN FORCÉE",description:`👮 <@${userId}>`,fields:[{name:"🟢 Début",value:`<t:${Math.floor(new Date(result.session.started_at).getTime()/1000)}:F>`,inline:true},{name:"🔴 Fin",value:`<t:${Math.floor(new Date(result.session.ended_at).getTime()/1000)}:F>`,inline:true},{name:"⏱ Temps travaillé",value:`${Math.floor(Number(result.session.duration_seconds||0)/3600)} h ${Math.floor((Number(result.session.duration_seconds||0)%3600)/60)} min`,inline:true},{name:"☕ Pauses",value:`${Number(result.session.pause_count||0)} pause(s) — ${Math.floor(Number(result.session.paused_seconds||0)/60)} min`,inline:true},{name:"🛡 Action effectuée par",value:`<@${moderatorId}>`,inline:true},{name:"📝 Remarque",value:remark,inline:false}],footer:{text:"Harmony Police Department • Dashboard"},timestamp:new Date().toISOString()}],allowed_mentions:{parse:[]}}).catch(err=>console.error("Log fin forcée dashboard:",err.message))}
+  if(logChannelId){await sendChannelMessage(logChannelId,{embeds:[{color:10038562,title:"🛑 RAPPORT DE SERVICE — FIN FORCÉE",description:`👮 <@${userId}>`,fields:[{name:"🟢 Début",value:`<t:${Math.floor(new Date(result.session.started_at).getTime()/1000)}:F>`,inline:true},{name:"🔴 Fin",value:`<t:${Math.floor(new Date(result.session.ended_at).getTime()/1000)}:F>`,inline:true},{name:"⏱ Temps travaillé",value:`${Math.floor(Number(result.session.duration_seconds||0)/3600)} h ${Math.floor((Number(result.session.duration_seconds||0)%3600)/60)} min`,inline:true},{name:"☕ Pauses",value:`${Number(result.session.pause_count||0)} pause(s) — ${Math.floor(Number(result.session.paused_seconds||0)/60)} min`,inline:true},{name:"🛡 Action effectuée par",value:`<@${moderatorId}>`,inline:true},{name:"⏳ Pénalité appliquée",value:`− ${Math.floor(penaltyRemovedSeconds/3600)} h ${Math.floor((penaltyRemovedSeconds%3600)/60)} min`,inline:true},{name:"📝 Remarque",value:remark,inline:false}],footer:{text:"Harmony Police Department • Dashboard"},timestamp:new Date().toISOString()}],allowed_mentions:{parse:[]}}).catch(err=>console.error("Log fin forcée dashboard:",err.message))}
   let remarkSent=false;
   let remarkError=null;
-  if(remarkChannelId){try{await sendChannelMessage(remarkChannelId,{content:`<@${userId}>`,embeds:[{color:15158332,title:"⚠️ REMARQUE — OUBLI DE FIN DE SERVICE",description:`<@${userId}>, une fin de service forcée a été effectuée car votre service n'a pas été correctement terminé.`,fields:[{name:"📝 Remarque du Haut Commandement",value:remark,inline:false},{name:"🛡 Remarque effectuée par",value:`<@${moderatorId}>`,inline:true},{name:"📅 Date",value:`<t:${Math.floor(Date.now()/1000)}:F>`,inline:true}],footer:{text:"Harmony Police Department • Merci de terminer correctement vos services"},timestamp:new Date().toISOString()}],allowed_mentions:{parse:[],users:[String(userId)].filter(id=>/^\d{17,20}$/.test(id))}});remarkSent=true}catch(err){remarkError=err?.message||String(err);console.error("Envoi remarque fin forcée:",remarkError)}}
-  res.json({success:true,message:remarkSent?"Fin de service forcée et remarque envoyée.":"La fin de service a été enregistrée, mais la remarque Discord n’a pas pu être envoyée. Vérifie l’ID du salon et les permissions du bot.",remarkSent,remarkError,session:result.session});
+  if(remarkChannelId){try{await sendChannelMessage(remarkChannelId,{content:`<@${userId}>`,embeds:[{color:15158332,title:"⚠️ تنبيه إداري",description:`تم إنهاء خدمة <@${userId}> إجبارياً بسبب عدم تسجيل نهاية الخدمة.`,fields:[{name:"⏳ خصم الساعات",value:penaltyRemovedSeconds>0?`تم خصم **${formatDurationAr(penaltyRemovedSeconds)}** من مجموع ساعاتك.`:"لم تتوفر ساعات كافية للخصم.",inline:false},{name:"📝 ملاحظة القيادة",value:remark,inline:false},{name:"🛡 بواسطة",value:`<@${moderatorId}>`,inline:true}],footer:{text:"Harmony Police • يرجى إنهاء الخدمة بشكل صحيح"}}],allowed_mentions:{parse:[],users:[String(userId)].filter(id=>/^\d{17,20}$/.test(id))}});remarkSent=true}catch(err){remarkError=err?.message||String(err);console.error("Envoi remarque fin forcée:",remarkError)}}
+  const penaltyText=penaltyRemovedSeconds>0?`${Math.floor(penaltyRemovedSeconds/3600)} h ${Math.floor((penaltyRemovedSeconds%3600)/60)} min retirées`:"aucune heure disponible à retirer";
+  res.json({success:true,message:remarkSent?`Fin de service forcée, ${penaltyText}, et remarque envoyée.`:`La fin de service a été enregistrée (${penaltyText}), mais la remarque Discord n’a pas pu être envoyée.`,remarkSent,remarkError,penaltyRequestedSeconds,penaltyRemovedSeconds,penaltyError,session:result.session});
+}catch(e){next(e)}});
+
+router.post("/:userId/force-pause",requireHighCommand,async(req,res,next)=>{try{
+  const userId=String(req.params.userId||"").trim();
+  if(!/^\d{16,22}$/.test(userId)){const e=new Error("Identifiant invalide.");e.status=400;e.publicMessage=e.message;throw e}
+  const remark=String(req.body?.remark||"").trim();
+  if(!remark||remark.length>500){const e=new Error("La remarque est obligatoire (500 caractères maximum).");e.status=400;e.publicMessage=e.message;throw e}
+  const remarkChannelId=getRemarkChannelId();
+  if(!remarkChannelId){const e=new Error("Le salon de remarques n’est pas configuré. Ajoute ATTENDANCE_REMARK_CHANNEL_ID dans Render puis redéploie le service.");e.status=503;e.publicMessage=e.message;throw e}
+  const moderatorId=getModeratorId(req);
+  const pauseResult=await pauseAttendance(userId);
+  if(!pauseResult.paused){
+    const message=pauseResult.reason==="already_paused"?"Ce policier est déjà en pause.":"Ce policier n’a pas de service actif.";
+    return res.status(409).json({success:false,message});
+  }
+  const penaltyRequestedSeconds=getForcedPausePenaltySeconds();
+  let penaltyRemovedSeconds=0,penaltyError=null;
+  if(penaltyRequestedSeconds>0){
+    try{
+      const penalty=await removeAttendanceTime({userId,seconds:penaltyRequestedSeconds,reason:`Pénalité automatique — oubli de mise en pause : ${remark}`,moderatorId});
+      penaltyRemovedSeconds=Number(penalty.removedSeconds||0);
+    }catch(err){
+      if(Number(err?.status)!==409){penaltyError=err?.message||String(err);console.error("Pénalité pause forcée:",penaltyError)}
+    }
+  }
+  const logChannelId=getLogChannelId();
+  if(logChannelId){await sendChannelMessage(logChannelId,{embeds:[{color:16753920,title:"☕ RAPPORT DE SERVICE — PAUSE FORCÉE",description:`👮 <@${userId}>`,fields:[{name:"⏳ Pénalité appliquée",value:`− ${Math.floor(penaltyRemovedSeconds/3600)} h ${Math.floor((penaltyRemovedSeconds%3600)/60)} min`,inline:true},{name:"📝 Motif",value:remark,inline:false},{name:"🛡 Action effectuée par",value:`<@${moderatorId}>`,inline:true}],footer:{text:"Harmony Police Department • Dashboard"},timestamp:new Date().toISOString()}],allowed_mentions:{parse:[]}}).catch(err=>console.error("Log pause forcée dashboard:",err.message))}
+  let remarkSent=false,remarkError=null;
+  try{
+    await sendChannelMessage(remarkChannelId,{content:`<@${userId}>`,embeds:[{color:16753920,title:"☕ تنبيه إداري — استراحة إجبارية",description:`تم تغيير حالة <@${userId}> إلى **استراحة** بسبب عدم تسجيل الاستراحة.`,fields:[{name:"⏳ خصم الساعات",value:penaltyRemovedSeconds>0?`تم خصم **${formatDurationAr(penaltyRemovedSeconds)}** من مجموع ساعاتك.`:"لم تتوفر ساعات كافية للخصم.",inline:false},{name:"📝 ملاحظة القيادة",value:remark,inline:false},{name:"🛡 بواسطة",value:`<@${moderatorId}>`,inline:true}],footer:{text:"Harmony Police • يرجى تسجيل الاستراحة في الوقت المناسب"}}],allowed_mentions:{parse:[],users:[String(userId)].filter(id=>/^\d{17,20}$/.test(id))}});
+    remarkSent=true;
+  }catch(err){remarkError=err?.message||String(err);console.error("Envoi remarque pause forcée:",remarkError)}
+  res.json({success:true,message:remarkSent?"Le policier a été mis en pause, la pénalité a été appliquée et la remarque envoyée.":"Le policier a été mis en pause, mais la remarque Discord n’a pas pu être envoyée.",remarkSent,remarkError,penaltyRequestedSeconds,penaltyRemovedSeconds,penaltyError,session:pauseResult.session});
 }catch(e){next(e)}});
 
 router.post("/:userId/remove-time",requireHighCommand,async(req,res,next)=>{try{

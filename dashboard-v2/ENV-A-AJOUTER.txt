@@ -48,3 +48,7 @@ Sans ces variables, il utilise l'ancien grade enregistré dans la base.
 # Salon Discord où envoyer une remarque au policier après une fin de service forcée.
 # Le bot doit avoir la permission Voir le salon et Envoyer des messages.
 ATTENDANCE_REMARK_CHANNEL_ID=ID_DU_SALON_REMARQUES
+
+# Pénalité appliquée lorsqu’un High Command force la mise en pause.
+# Valeur par défaut : 1 heure.
+FORCED_PAUSE_PENALTY_HOURS=1
