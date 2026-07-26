@@ -135,24 +135,7 @@
           <article class="stat-card"><div class="stat-icon">📆</div><div><span>Temps cette semaine</span><strong id="attendanceWeek">0 min</strong></div></article>
         </div>
         <div class="attendance-grid">
-          <article class="panel">
-            <div class="panel-head attendance-panel-head">
-              <div><h2>État des policiers</h2><p>Service, pause et temps cumulés</p></div>
-              <div class="attendance-tools">
-                <div class="attendance-filters" id="attendanceFilters" role="group" aria-label="Filtrer les policiers">
-                  <button type="button" class="attendance-filter" data-filter="all">Tous <span id="filterCountAll">0</span></button>
-                  <button type="button" class="attendance-filter active" data-filter="active">🟢 En service <span id="filterCountActive">0</span></button>
-                  <button type="button" class="attendance-filter" data-filter="paused">☕ En pause <span id="filterCountPaused">0</span></button>
-                  <button type="button" class="attendance-filter" data-filter="offline">⚫ Hors service <span id="filterCountOffline">0</span></button>
-                </div>
-                <div class="attendance-search-row">
-                  <input class="search" id="attendanceSearch" type="search" placeholder="Rechercher un policier...">
-                  <span class="attendance-updated" id="attendanceUpdated">Mise à jour…</span>
-                </div>
-              </div>
-            </div>
-            <div class="table-scroll"><table><thead><tr><th>Policier</th><th>Statut</th><th>Session</th><th>Aujourd'hui</th><th>Semaine</th><th>Mois</th><th></th></tr></thead><tbody id="attendanceTableBody"></tbody></table></div>
-          </article>
+          <article class="panel"><div class="panel-head"><div><h2>État des policiers</h2><p>Service, pause et temps cumulés</p></div><input class="search" id="attendanceSearch" type="search" placeholder="Rechercher un policier..."></div><div class="table-scroll"><table><thead><tr><th>Policier</th><th>Statut</th><th>Session</th><th>Aujourd'hui</th><th>Semaine</th><th>Mois</th><th></th></tr></thead><tbody id="attendanceTableBody"></tbody></table></div></article>
           <article class="panel"><div class="panel-head"><div><h2>Top semaine</h2><p>Temps de présence</p></div></div><div id="attendanceRanking" class="attendance-ranking"></div></article>
         </div>
         <div class="attendance-grid panel-spaced">
