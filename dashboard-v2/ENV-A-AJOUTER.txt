@@ -44,3 +44,7 @@ Ordre des grades : Academy → Officer → Senior Officer → Sergeant → First
 
 Le dashboard choisit automatiquement le rôle le plus élevé présent sur le membre.
 Sans ces variables, il utilise l'ancien grade enregistré dans la base.
+
+# Salon Discord où envoyer une remarque au policier après une fin de service forcée.
+# Le bot doit avoir la permission Voir le salon et Envoyer des messages.
+ATTENDANCE_REMARK_CHANNEL_ID=ID_DU_SALON_REMARQUES

@@ -22,3 +22,4 @@ Fonctions :
 - logs début/fin de service
 - stockage permanent dans Neon PostgreSQL
 - protection contre deux services actifs pour le même policier
+ATTENDANCE_REMARK_CHANNEL_ID=ID_DU_SALON_REMARQUES
