@@ -12,3 +12,8 @@ Important :
 5. Après avoir ajouté/modifié la variable dans Render, redéploie ou redémarre le service.
 
 Cette version bloque désormais la fin forcée si le salon n’est pas configuré, et affiche une erreur claire si Discord refuse l’envoi.
+
+CORRECTION V11
+- La mention Discord autorisée contient uniquement l'identifiant valide du policier concerné.
+- L'identifiant du modérateur reste visible dans l'embed, mais n'est pas ajouté à allowed_mentions.
+- Cela corrige l'erreur Discord 50035: allowed_mentions.users invalide.
