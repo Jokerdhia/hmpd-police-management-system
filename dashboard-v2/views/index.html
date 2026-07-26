@@ -49,12 +49,17 @@
       </header>
 
       <div id="notification" class="toast hidden"></div>
+      <div id="liveNotifications" class="live-notifications" aria-live="polite" aria-atomic="false"></div>
 
       <section id="dashboardPage" class="page active">
         <div class="stats-grid">
+          <article class="stat-card connected-card">
+            <div class="stat-icon connected-icon"><span class="live-pulse"></span>👮</div>
+            <div><span>Policiers connectés</span><strong id="connectedOfficerCount">0</strong><small id="connectedOfficerDetail">Service et pause</small></div>
+          </article>
           <article class="stat-card">
-            <div class="stat-icon">👮</div>
-            <div><span>Policiers</span><strong id="officerCount">0</strong></div>
+            <div class="stat-icon">👥</div>
+            <div><span>Effectif total</span><strong id="officerCount">0</strong></div>
           </article>
           <article class="stat-card">
             <div class="stat-icon">⭐</div>

@@ -296,3 +296,109 @@ tbody tr:last-child td{border-bottom:0}
 }
 .brand{gap:14px !important;}
 .brand-copy strong{font-size:19px !important;}
+
+/* V8 — Harmony Command Center : thème premium, avatars, classement, notifications et profils */
+:root{
+  --bg:#040b15;
+  --panel:#0b1a2d;
+  --panel-2:#071426;
+  --line:#1d3a5d;
+  --blue:#2f86ff;
+  --blue2:#73c5ff;
+  --green:#36e390;
+  --yellow:#ffd264;
+  --red:#ff6470;
+  --soft-shadow:0 18px 48px rgba(0,0,0,.34);
+}
+body{
+  background:
+    radial-gradient(circle at 72% -12%,rgba(40,133,255,.22),transparent 32%),
+    radial-gradient(circle at 10% 78%,rgba(24,102,181,.10),transparent 32%),
+    linear-gradient(150deg,#030812 0%,#07111f 45%,#06101d 100%);
+}
+.sidebar{background:linear-gradient(180deg,rgba(8,24,44,.99),rgba(3,13,25,.99));border-right-color:rgba(83,156,232,.22)}
+.panel,.stat-card{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.panel{background:linear-gradient(155deg,rgba(16,41,70,.96),rgba(7,23,42,.98));border-color:rgba(81,137,198,.35)}
+.stat-card{background:linear-gradient(145deg,rgba(30,69,112,.72),rgba(9,27,49,.96));}
+.stat-card:before{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(120deg,rgba(255,255,255,.055),transparent 28%);pointer-events:none}
+.stats-grid{grid-template-columns:repeat(5,minmax(0,1fr))}
+.connected-card{border-color:rgba(54,227,144,.35);box-shadow:0 18px 45px rgba(0,0,0,.29),0 0 24px rgba(54,227,144,.06)}
+.connected-card small{display:block;margin-top:5px;color:#77a7c7;font-size:11px}
+.connected-icon{position:relative;color:#a9f8cf}
+.live-pulse{position:absolute;right:7px;top:7px;width:9px;height:9px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(54,227,144,.65);animation:livePulse 1.9s infinite}
+@keyframes livePulse{0%{box-shadow:0 0 0 0 rgba(54,227,144,.55)}70%{box-shadow:0 0 0 10px rgba(54,227,144,0)}100%{box-shadow:0 0 0 0 rgba(54,227,144,0)}}
+
+/* Logo Harmony Police animé */
+.brand-mark{position:relative;isolation:isolate;animation:logoFloat 4.6s ease-in-out infinite}
+.brand-mark:before{content:"";position:absolute;inset:-18px;border-radius:50%;z-index:-1;background:radial-gradient(circle,rgba(67,169,255,.34),transparent 68%);animation:logoGlow 2.8s ease-in-out infinite}
+.brand-mark:after{content:"";position:absolute;inset:-35% -55%;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.26) 49%,transparent 62%);transform:translateX(-70%) rotate(12deg);animation:logoShine 5.5s ease-in-out infinite;pointer-events:none}
+.brand-mark img{animation:logoBreathe 3.1s ease-in-out infinite}
+@keyframes logoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+@keyframes logoGlow{0%,100%{opacity:.45;transform:scale(.92)}50%{opacity:.9;transform:scale(1.08)}}
+@keyframes logoShine{0%,62%{transform:translateX(-80%) rotate(12deg)}82%,100%{transform:translateX(85%) rotate(12deg)}}
+@keyframes logoBreathe{0%,100%{filter:drop-shadow(0 0 5px rgba(64,170,255,.30));transform:scale(1.08)}50%{filter:drop-shadow(0 0 12px rgba(82,188,255,.62));transform:scale(1.12)}}
+
+/* Avatars vivants et profils cliquables */
+.officer-profile-link{border:0;background:transparent;color:inherit;text-align:left;padding:0;cursor:pointer;max-width:100%}
+.officer-profile-link:hover .officer-name strong{color:#8dc8ff}
+.avatar-shell{position:relative;display:inline-flex;flex:0 0 46px;width:46px;height:46px;border-radius:50%}
+.avatar-shell .officer-avatar{width:46px;height:46px;flex-basis:46px;transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.avatar-presence{position:absolute;right:-1px;bottom:1px;width:13px;height:13px;border:3px solid #0c1d32;border-radius:50%;background:#5e7189;box-shadow:0 0 8px rgba(0,0,0,.4)}
+.avatar-active .officer-avatar{border-color:#45e99a;box-shadow:0 0 0 3px rgba(54,227,144,.12),0 0 18px rgba(54,227,144,.34)}
+.avatar-active .avatar-presence{background:#39e692;box-shadow:0 0 12px rgba(54,227,144,.82);animation:avatarPulse 1.65s infinite}
+.avatar-paused .officer-avatar{border-color:#ffcb69;box-shadow:0 0 0 3px rgba(255,203,105,.1),0 0 15px rgba(255,203,105,.22)}
+.avatar-paused .avatar-presence{background:#ffc85b;box-shadow:0 0 10px rgba(255,200,91,.62)}
+.avatar-offline .officer-avatar{border-color:#49627e;filter:saturate(.72);opacity:.9}
+.avatar-offline .avatar-presence{background:#60738a}
+.officer-profile-link:hover .officer-avatar{transform:scale(1.07)}
+@keyframes avatarPulse{0%,100%{transform:scale(1)}50%{transform:scale(.76)}}
+
+/* Classements premium */
+.ranking-item{width:100%;border:1px solid rgba(74,117,162,.32);color:inherit;text-align:left;cursor:pointer;position:relative;overflow:hidden}
+.ranking-item:before{content:"";position:absolute;inset:0;opacity:0;background:linear-gradient(90deg,rgba(76,155,255,.1),transparent);transition:opacity .2s ease}
+.ranking-item:hover:before{opacity:1}
+.ranking-item.podium{min-height:76px;border-width:1px}
+.ranking-item.podium-1{background:linear-gradient(135deg,rgba(108,77,16,.42),rgba(18,32,50,.96));border-color:rgba(255,210,100,.46);box-shadow:inset 0 0 26px rgba(255,198,61,.055)}
+.ranking-item.podium-2{background:linear-gradient(135deg,rgba(102,119,139,.25),rgba(14,30,49,.96));border-color:rgba(196,220,244,.34)}
+.ranking-item.podium-3{background:linear-gradient(135deg,rgba(126,66,28,.3),rgba(14,29,47,.96));border-color:rgba(223,139,76,.34)}
+.ranking-position{font-size:23px;filter:drop-shadow(0 4px 8px rgba(0,0,0,.3))}
+.ranking-points{display:grid;text-align:right;line-height:1.05}
+.ranking-points strong{font-size:18px}.ranking-points span{margin-top:4px;color:#7694b6;font-size:10px;text-transform:uppercase;letter-spacing:.8px}
+.attendance-ranking{padding:12px 16px 16px}
+.attendance-rank{position:relative;border:1px solid transparent;border-radius:13px;margin-top:7px;padding:11px 10px;display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:8px}
+.attendance-rank:first-child{margin-top:0}
+.attendance-podium-1{background:linear-gradient(90deg,rgba(255,201,72,.13),transparent);border-color:rgba(255,210,100,.26)}
+.attendance-podium-2{background:linear-gradient(90deg,rgba(198,218,238,.09),transparent);border-color:rgba(198,218,238,.18)}
+.attendance-podium-3{background:linear-gradient(90deg,rgba(216,130,73,.10),transparent);border-color:rgba(216,130,73,.2)}
+.attendance-medal{text-align:center;font-size:19px}.attendance-time{color:#eaf5ff;white-space:nowrap;font-size:13px}
+
+/* Centre de notifications en direct */
+.live-notifications{position:fixed;z-index:1400;right:22px;top:22px;width:min(380px,calc(100vw - 30px));display:grid;gap:10px;pointer-events:none}
+.live-notification{pointer-events:auto;display:grid;grid-template-columns:42px minmax(0,1fr) 28px;align-items:center;gap:11px;padding:12px;border:1px solid rgba(91,153,218,.38);border-radius:15px;background:linear-gradient(145deg,rgba(14,37,64,.98),rgba(7,22,40,.98));box-shadow:0 18px 55px rgba(0,0,0,.46);opacity:0;transform:translateX(28px) scale(.98);transition:opacity .25s ease,transform .25s ease}
+.live-notification.show{opacity:1;transform:translateX(0) scale(1)}
+.live-notification img,.notification-symbol{width:42px;height:42px;border-radius:50%;object-fit:cover;display:grid;place-items:center;background:#0b1a2d;border:2px solid #3d77ad}
+.live-notification.active img{border-color:#43e797;box-shadow:0 0 14px rgba(54,227,144,.28)}
+.live-notification.paused img{border-color:#ffc85b}.live-notification.offline img{border-color:#61768e;filter:saturate(.75)}
+.live-notification strong,.live-notification small{display:block}.live-notification strong{font-size:13px;line-height:1.35}.live-notification small{margin-top:4px;color:#7898ba;font-size:10px}
+.live-notification button{border:0;background:transparent;color:#718aa7;cursor:pointer;font-size:15px}
+
+/* Profil policier plus immersif */
+.modal-profile{width:min(960px,100%);border-color:rgba(80,151,223,.44);background:linear-gradient(155deg,#102b49,#07172b 58%,#081729)}
+.profile-hero{position:relative;overflow:hidden;min-height:170px;background:radial-gradient(circle at 78% 10%,rgba(61,155,255,.25),transparent 32%),linear-gradient(125deg,rgba(35,96,159,.24),transparent 52%);border-bottom:1px solid rgba(77,135,195,.25)}
+.profile-hero:after{content:"HARMONY POLICE";position:absolute;right:24px;bottom:10px;font-size:34px;font-weight:950;letter-spacing:4px;color:rgba(130,194,255,.055);pointer-events:none}
+.profile-avatar{width:106px;height:106px;border:4px solid #5aaeff;box-shadow:0 0 0 7px rgba(49,135,255,.1),0 0 30px rgba(49,135,255,.26)}
+.profile-hero h3{font-size:29px;letter-spacing:-.5px}
+.profile-status{box-shadow:inset 0 1px 0 rgba(255,255,255,.1)}
+.profile-grid{gap:14px;padding-top:22px}
+.profile-card{position:relative;overflow:hidden;background:linear-gradient(145deg,rgba(18,47,78,.9),rgba(7,23,42,.95));border-color:rgba(79,133,191,.32);min-height:108px}
+.profile-card:after{content:"";position:absolute;width:70px;height:70px;border-radius:50%;right:-24px;bottom:-28px;background:radial-gradient(circle,rgba(68,153,245,.18),transparent 70%)}
+.profile-card strong{display:block;margin-top:3px;font-size:20px;color:#f1f8ff}
+.profile-card small{display:block;margin-top:6px;color:#7797b9}
+.profile-progress{margin:0 24px 20px;border-color:rgba(78,139,201,.35);background:linear-gradient(145deg,rgba(11,34,59,.92),rgba(6,20,37,.95))}
+.tabs{border-top:1px solid rgba(68,115,165,.22);padding-top:18px}
+.tab.active{box-shadow:0 8px 18px rgba(47,134,255,.22)}
+
+@media(max-width:1450px){.stats-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:1150px){.stats-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:800px){.stats-grid{grid-template-columns:1fr}.live-notifications{right:15px;top:15px}.profile-hero:after{display:none}}
+@media(prefers-reduced-motion:reduce){.brand-mark,.brand-mark img,.brand-mark:before,.brand-mark:after,.live-pulse,.avatar-active .avatar-presence{animation:none!important}.live-notification{transition:none}}
