@@ -1,0 +1,13 @@
+HMPD MDT — AMÉLIORATIONS PREMIUM V5
+
+Modifications appliquées uniquement au dashboard :
+- Design plus moderne et professionnel type Command Center / MDT.
+- Sidebar, cartes, tableaux, filtres, recherche et modales améliorés.
+- Meilleur contraste, ombres plus propres et animations discrètes.
+- Lignes de policiers en service mises en valeur.
+- Interface responsive améliorée pour ordinateur, tablette et mobile.
+- Boutons « Corriger » et « Fin forcée » strictement identiques :
+  largeur 105 px, hauteur 34 px, coins 8 px, alignement et espacement uniformes.
+
+Aucune modification de la base de données, du bot Discord ou de l'API.
+Fichier principal modifié : dashboard-v2/public/css/style.css

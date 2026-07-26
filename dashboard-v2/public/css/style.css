@@ -40,3 +40,205 @@ body.modal-open{overflow:hidden}.attendance-correction-card{width:min(590px,100%
   font-weight:600;
   box-sizing:border-box;
 }
+
+/* =========================================================
+   HMPD MDT — PREMIUM COMMAND CENTER THEME (V5)
+   Modernisation visuelle sans modification du bot ni de l'API
+   ========================================================= */
+:root{
+  --bg:#050b14;
+  --sidebar:#081426;
+  --panel:#0e1e34;
+  --panel-2:#09172a;
+  --line:#203a5d;
+  --muted:#8da9c8;
+  --text:#f5f9ff;
+  --blue:#3187ff;
+  --blue2:#70b7ff;
+  --green:#38db89;
+  --red:#ff626d;
+  --yellow:#ffd261;
+  --shadow:0 18px 55px rgba(0,0,0,.32);
+  --soft-shadow:0 10px 28px rgba(0,0,0,.22);
+}
+
+html{scrollbar-color:#2b4f78 #07111f;scrollbar-width:thin}
+body{
+  background:
+    radial-gradient(circle at 84% -10%,rgba(49,135,255,.18),transparent 33%),
+    radial-gradient(circle at 42% 110%,rgba(56,219,137,.07),transparent 38%),
+    var(--bg);
+  background-attachment:fixed;
+}
+
+.shell{grid-template-columns:258px minmax(0,1fr)}
+.sidebar{
+  padding:24px 17px;
+  background:linear-gradient(180deg,rgba(10,27,49,.98),rgba(6,17,32,.98));
+  box-shadow:18px 0 55px rgba(0,0,0,.18);
+  backdrop-filter:blur(18px);
+}
+.brand{margin-bottom:31px;gap:12px}
+.brand-mark{
+  width:52px;height:52px;border-radius:16px;
+  background:linear-gradient(145deg,#256fe7,#58c7ff);
+  box-shadow:0 12px 28px rgba(49,135,255,.32),inset 0 1px 0 rgba(255,255,255,.28);
+  letter-spacing:.3px;
+}
+.brand-copy strong{font-size:18px;letter-spacing:-.2px}
+.brand-copy span{font-size:11px}
+.nav{gap:7px}
+.nav-item{
+  min-height:47px;padding:12px 14px;border:1px solid transparent;
+  border-radius:12px;transition:transform .18s ease,background .18s ease,border-color .18s ease,color .18s ease;
+}
+.nav-item span{display:grid;place-items:center;width:20px;color:#9fc7f7}
+.nav-item:hover{transform:translateX(3px);border-color:rgba(112,183,255,.13);background:rgba(24,54,91,.72)}
+.nav-item.active{
+  background:linear-gradient(135deg,#347ff0,#296bd3);
+  border-color:rgba(151,203,255,.5);
+  box-shadow:0 10px 25px rgba(27,102,218,.28),inset 0 1px 0 rgba(255,255,255,.18);
+}
+.sidebar-user{background:linear-gradient(145deg,rgba(17,38,66,.92),rgba(9,24,44,.92));box-shadow:var(--soft-shadow)}
+
+.main{padding:28px 30px 42px}
+.topbar{margin-bottom:22px}
+.topbar h1{font-size:30px;letter-spacing:-.7px;text-shadow:0 2px 20px rgba(255,255,255,.05)}
+.eyebrow{color:#72b8ff;letter-spacing:2px}
+.topbar-actions{gap:10px}
+.clock,.btn{
+  min-height:42px;border-radius:12px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.045);
+}
+.clock{background:rgba(13,31,55,.82);backdrop-filter:blur(12px)}
+.btn{transition:transform .18s ease,filter .18s ease,box-shadow .18s ease}
+.btn:hover{transform:translateY(-1px);filter:brightness(1.08)}
+.btn-primary{box-shadow:0 9px 20px rgba(49,135,255,.22)}
+
+.stat-card{
+  position:relative;overflow:hidden;min-height:112px;padding:18px;
+  border-color:rgba(75,115,161,.42);
+  background:linear-gradient(145deg,rgba(255,255,255,.035),transparent 52%),linear-gradient(180deg,#112641,#0d1d33);
+  box-shadow:var(--soft-shadow);
+  transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease;
+}
+.stat-card:after{
+  content:"";position:absolute;inset:auto -35px -58px auto;width:125px;height:125px;border-radius:50%;
+  background:radial-gradient(circle,rgba(80,157,255,.12),transparent 66%);pointer-events:none;
+}
+.stat-card:hover{transform:translateY(-2px);border-color:rgba(112,183,255,.58);box-shadow:0 16px 38px rgba(0,0,0,.3)}
+.stat-icon{
+  width:46px;height:46px;border-radius:14px;
+  border:1px solid rgba(112,183,255,.1);
+  background:linear-gradient(145deg,#0b1a2f,#081426);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.04);
+}
+.stat-card strong{font-size:22px;letter-spacing:-.3px}
+
+.panel{
+  border-color:rgba(69,106,151,.44);
+  background:linear-gradient(180deg,rgba(16,36,62,.98),rgba(12,29,51,.98));
+  box-shadow:var(--soft-shadow);
+}
+.panel-head{padding:18px 20px;background:linear-gradient(180deg,rgba(255,255,255,.018),transparent)}
+.panel-head h2{font-size:18px;letter-spacing:-.2px}
+.search{
+  min-height:42px;background:rgba(6,18,34,.72);border-color:#29486f;
+  transition:border-color .18s ease,box-shadow .18s ease,background .18s ease;
+}
+.search:focus{border-color:#5ba8ff;background:#081a31;box-shadow:0 0 0 3px rgba(49,135,255,.13)}
+.search::placeholder{color:#6f88a7}
+
+.table-scroll{scrollbar-color:#315a86 transparent;scrollbar-width:thin}
+thead{background:rgba(5,16,30,.46)}
+th{padding-top:14px;padding-bottom:14px;color:#86add8;font-weight:900}
+td{transition:background .16s ease}
+tbody tr:hover td{background:rgba(47,112,196,.065)}
+tbody tr:last-child td{border-bottom:0}
+.officer-avatar{box-shadow:0 6px 16px rgba(0,0,0,.26)}
+
+.ranking-item{border:1px solid rgba(59,91,128,.34);background:linear-gradient(145deg,rgba(9,25,46,.96),rgba(8,20,37,.96));transition:transform .18s ease,border-color .18s ease}
+.ranking-item:hover{transform:translateX(3px);border-color:rgba(112,183,255,.42)}
+
+/* Présence : panneaux, filtres et lignes plus lisibles */
+.attendance-stats{gap:12px;margin-bottom:16px}
+.attendance-active{border-color:rgba(56,219,137,.34)}
+.attendance-paused{border-color:rgba(255,210,97,.3)}
+.attendance-grid{gap:16px}
+.attendance-panel-head{padding-bottom:16px}
+.attendance-tools{gap:9px;min-width:min(680px,100%)}
+.attendance-filters{
+  padding:4px;border:1px solid rgba(54,91,132,.48);border-radius:13px;
+  background:rgba(5,17,32,.55);gap:4px;
+}
+.attendance-filter{
+  min-height:34px;padding:6px 10px;border-color:transparent;border-radius:9px;background:transparent;
+  font-size:11px;letter-spacing:.05px;
+}
+.attendance-filter:hover{background:rgba(42,83,132,.38);border-color:transparent}
+.attendance-filter.active{
+  border-color:rgba(116,190,255,.52);
+  background:linear-gradient(135deg,rgba(49,135,255,.46),rgba(38,102,204,.31));
+  box-shadow:0 5px 15px rgba(25,91,183,.2),inset 0 1px 0 rgba(255,255,255,.13);
+}
+.attendance-filter span{min-width:21px;height:19px;background:rgba(255,255,255,.09)}
+.attendance-search-row .search{width:min(330px,100%)}
+.attendance-updated{color:#7896b8}
+.attendance-status{min-width:90px;justify-content:center;padding:6px 9px}
+.attendance-row-active td{background:linear-gradient(90deg,rgba(56,219,137,.035),transparent 45%)}
+.attendance-row-active:hover td{background:linear-gradient(90deg,rgba(56,219,137,.075),rgba(47,112,196,.045))}
+.attendance-row-active .officer-avatar{border-color:#43dc8c;box-shadow:0 0 0 3px rgba(56,219,137,.12),0 0 17px rgba(56,219,137,.25)}
+
+.attendance-ranking{padding:8px 16px}
+.attendance-rank{padding:12px 3px;transition:transform .18s ease,background .18s ease}
+.attendance-rank:hover{transform:translateX(3px);background:rgba(52,111,184,.045)}
+.attendance-history{scrollbar-color:#315a86 transparent;scrollbar-width:thin}
+
+/* Les deux boutons d'action sont strictement identiques en dimensions */
+.attendance-actions{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;min-width:105px}
+.attendance-actions .attendance-remove,
+.attendance-actions .attendance-force{
+  width:105px;height:34px;min-width:105px;min-height:34px;max-width:105px;max-height:34px;
+  margin:0;padding:0 8px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:800;line-height:1;white-space:nowrap;box-sizing:border-box;
+  transition:transform .16s ease,filter .16s ease,box-shadow .16s ease;
+}
+.attendance-actions .attendance-remove{background:linear-gradient(135deg,#3386f5,#246bd1);border:1px solid #5aa4ff;box-shadow:0 7px 15px rgba(37,108,213,.2)}
+.attendance-actions .attendance-force{background:linear-gradient(135deg,#ff626d,#dd4450);border:1px solid #ff8189;box-shadow:0 7px 15px rgba(221,68,80,.18)}
+.attendance-actions .attendance-remove:hover,
+.attendance-actions .attendance-force:hover{transform:translateY(-1px);filter:brightness(1.08)}
+
+/* Modales plus premium */
+.modal-backdrop{background:rgba(1,6,13,.82);backdrop-filter:blur(10px)}
+.modal-card{border-color:#31547d;background:linear-gradient(180deg,#10233d,#0b1b30);box-shadow:0 34px 100px rgba(0,0,0,.62)}
+.modal-head{background:rgba(16,35,61,.96);backdrop-filter:blur(15px)}
+.form input,.form textarea,.form select{background:#08172a;border-color:#29486f}
+.form input:focus,.form textarea:focus,.form select:focus{border-color:#5ba8ff;box-shadow:0 0 0 3px rgba(49,135,255,.12)}
+
+/* Responsive amélioré */
+@media(max-width:1350px){
+  .shell{grid-template-columns:230px minmax(0,1fr)}
+  .main{padding:26px 24px 38px}
+  .attendance-tools{min-width:570px}
+}
+@media(max-width:1050px){
+  .attendance-tools{min-width:0}
+  .attendance-filters{width:100%}
+}
+@media(max-width:800px){
+  .shell{grid-template-columns:1fr}
+  .sidebar{position:relative;height:auto;padding:17px}
+  .brand{margin-bottom:18px}
+  .nav{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .nav-item:hover{transform:none}
+  .main{padding:20px 15px 32px}
+  .topbar h1{font-size:27px}
+}
+@media(max-width:620px){
+  .attendance-filters{padding:5px}
+  .attendance-filter{flex:1 1 calc(50% - 4px)}
+  .attendance-actions{min-width:92px}
+  .attendance-actions .attendance-remove,.attendance-actions .attendance-force{
+    width:92px;min-width:92px;max-width:92px;font-size:11px;
+  }
+}
