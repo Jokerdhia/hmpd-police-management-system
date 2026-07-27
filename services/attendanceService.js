@@ -676,10 +676,10 @@ async function sendForcedRemark(client, { userId, moderatorId, remark, kind, pen
   const isPause = kind === "pause";
   const embed = new EmbedBuilder()
     .setColor(isPause ? 0xf39c12 : 0xe74c3c)
-    .setTitle(isPause ? "☕ تنبيه إداري — استراحة إجبارية" : "⚠️ تنبيه إداري — إنهاء خدمة إجباري")
+    .setTitle(isPause ? "☕ تنبيه إداري — استراحة إجبارية" : "⚠️ تنبيه إداري")
     .setDescription(isPause
-      ? `تم تغيير حالة <@${userId}> إلى **استراحة** بواسطة القيادة.`
-      : `تم إنهاء خدمة <@${userId}> إجبارياً بواسطة القيادة.`)
+      ? `تم تغيير حالة <@${userId}> إلى **استراحة** بسبب عدم تسجيل الاستراحة.`
+      : `تم إنهاء خدمة <@${userId}> إجبارياً بسبب عدم تسجيل نهاية الخدمة.`)
     .addFields(
       {
         name: "⏳ خصم الساعات",
@@ -691,7 +691,9 @@ async function sendForcedRemark(client, { userId, moderatorId, remark, kind, pen
       { name: "📝 ملاحظة القيادة", value: remark.slice(0, 1024), inline: false },
       { name: "🛡 بواسطة", value: `<@${moderatorId}>`, inline: true }
     )
-    .setFooter({ text: "Harmony Police Department • Administration" })
+    .setFooter({ text: isPause
+      ? "Harmony Police • يرجى تسجيل الاستراحة في الوقت المناسب"
+      : "Harmony Police • يرجى إنهاء الخدمة بشكل صحيح" })
     .setTimestamp();
 
   await channel.send({
