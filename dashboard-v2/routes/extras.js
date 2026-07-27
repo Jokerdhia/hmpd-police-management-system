@@ -1,6 +1,8 @@
 const express = require("express");
 const {
   listNotes,
+  countUnreadNotes,
+  markNotesRead,
   addNote,
   listSanctions,
   addSanction,
@@ -92,12 +94,37 @@ router.get("/me/notes", async (request, response, next) => {
       "Identifiant du policier connecté"
     );
 
-    const notes = await listNotes(userId);
+    const [notes, unread] = await Promise.all([
+      listNotes(userId),
+      countUnreadNotes(userId),
+    ]);
 
     return response.status(200).json({
       success: true,
       total: notes.length,
+      unread,
       notes,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+
+router.post("/me/notes/read", async (request, response, next) => {
+  try {
+    const userId = normalizeDiscordId(
+      getModeratorId(request),
+      "Identifiant du policier connecté"
+    );
+
+    const result = await markNotesRead(userId);
+
+    return response.status(200).json({
+      success: true,
+      message: "Messages marqués comme lus.",
+      unread: 0,
+      result,
     });
   } catch (error) {
     return next(error);

@@ -5,20 +5,25 @@ const pool = new Pool({ connectionString: DATABASE_URL, ssl: DATABASE_URL.includ
 const ready = pool.query(`
   CREATE TABLE IF NOT EXISTS officer_notes (
     id BIGSERIAL PRIMARY KEY, user_id TEXT NOT NULL, content TEXT NOT NULL,
-    author_id TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    author_id TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMPTZ
   );
   CREATE TABLE IF NOT EXISTS officer_sanctions (
     id BIGSERIAL PRIMARY KEY, user_id TEXT NOT NULL, sanction_type TEXT NOT NULL,
     reason TEXT NOT NULL, author_id TEXT NOT NULL, expires_at TIMESTAMPTZ,
     status TEXT NOT NULL DEFAULT 'active', created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
   );
+  ALTER TABLE officer_notes ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
   CREATE INDEX IF NOT EXISTS idx_notes_user ON officer_notes(user_id);
+  CREATE INDEX IF NOT EXISTS idx_notes_unread ON officer_notes(user_id, read_at);
   CREATE INDEX IF NOT EXISTS idx_sanctions_user ON officer_sanctions(user_id);
 `).then(() => console.log("✅ Dashboard connecté à Neon PostgreSQL."));
 
 function lim(v,f=50,m=200){const n=parseInt(v,10);return Number.isInteger(n)&&n>0?Math.min(n,m):f}
 function txt(v,n,m){const s=String(v||"").trim();if(!s||s.length>m)throw new Error(`${n} est invalide.`);return s}
-async function listNotes(userId,limit=50){await ready;return (await pool.query("SELECT id,user_id,content,author_id,created_at FROM officer_notes WHERE user_id=$1 ORDER BY id DESC LIMIT $2",[txt(userId,"userId",64),lim(limit)])).rows}
+async function listNotes(userId,limit=50){await ready;return (await pool.query("SELECT id,user_id,content,author_id,created_at,read_at FROM officer_notes WHERE user_id=$1 ORDER BY id DESC LIMIT $2",[txt(userId,"userId",64),lim(limit)])).rows}
+async function countUnreadNotes(userId){await ready;const r=await pool.query("SELECT COUNT(*)::int AS count FROM officer_notes WHERE user_id=$1 AND read_at IS NULL",[txt(userId,"userId",64)]);return Number(r.rows[0]?.count||0)}
+async function markNotesRead(userId){await ready;const r=await pool.query("UPDATE officer_notes SET read_at=CURRENT_TIMESTAMP WHERE user_id=$1 AND read_at IS NULL",[txt(userId,"userId",64)]);return{updated:r.rowCount}}
 async function addNote({userId,content,authorId}){await ready;const r=await pool.query("INSERT INTO officer_notes(user_id,content,author_id) VALUES($1,$2,$3) RETURNING id",[txt(userId,"userId",64),txt(content,"content",4000),txt(authorId,"authorId",64)]);return{id:Number(r.rows[0].id)}}
 async function deleteNote(id){await ready;const r=await pool.query("DELETE FROM officer_notes WHERE id=$1",[parseInt(id,10)]);return{deleted:r.rowCount>0}}
 async function listSanctions(userId,limit=50){await ready;return (await pool.query("SELECT id,user_id,sanction_type,reason,author_id,expires_at,status,created_at FROM officer_sanctions WHERE user_id=$1 ORDER BY id DESC LIMIT $2",[txt(userId,"userId",64),lim(limit)])).rows}
@@ -145,4 +150,4 @@ async function getWeeklyBestOfficer(){
 }
 
 async function closeDatabase(){await pool.end()}
-module.exports={listNotes,addNote,deleteNote,listSanctions,addSanction,updateSanctionStatus,deleteSanction,listActivity,listOfficerActivity,getAttendanceSessions,getAttendanceActive,getAttendanceTotalsDashboard,getAttendanceDaily,getOfficerAttendanceTotal,getWeeklyBestOfficer,closeDatabase};
+module.exports={listNotes,countUnreadNotes,markNotesRead,addNote,deleteNote,listSanctions,addSanction,updateSanctionStatus,deleteSanction,listActivity,listOfficerActivity,getAttendanceSessions,getAttendanceActive,getAttendanceTotalsDashboard,getAttendanceDaily,getOfficerAttendanceTotal,getWeeklyBestOfficer,closeDatabase};
