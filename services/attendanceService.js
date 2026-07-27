@@ -897,21 +897,96 @@ async function handleAttendanceButton(interaction, client) {
       return true;
     }
 
-    // showModal doit être appelé avant tout defer/reply. Comme le gestionnaire a déjà différé,
-    // on ouvre le modal via une nouvelle interaction dédiée depuis un bouton non différé.
-    await interaction.editReply({
-      content: action === "force-end-open"
-        ? `📝 Clique de nouveau sur le bouton ci-dessous pour saisir la remarque de fin forcée de <@${targetUserId}>.`
-        : `📝 Clique de nouveau sur le bouton ci-dessous pour saisir la remarque de pause forcée de <@${targetUserId}>.`,
-      components: [new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`attendance:${action === "force-end-open" ? "force-end-modal" : "force-pause-modal"}:${targetUserId}`)
-          .setLabel(action === "force-end-open" ? "Saisir la remarque — fin" : "Saisir la remarque — pause")
-          .setStyle(action === "force-end-open" ? ButtonStyle.Danger : ButtonStyle.Primary)
-          .setEmoji(action === "force-end-open" ? "🛑" : "☕")
-      )],
-      allowedMentions: { parse: [] },
-    });
+    // Action directe depuis Discord : aucun formulaire ni remarque à remplir.
+    const isPause = action === "force-pause-open";
+    const remark = isPause
+      ? "Pause forcée directement depuis Discord par le High Command."
+      : "Fin de service forcée directement depuis Discord par le High Command.";
+
+    let session;
+    let penaltyRequestedSeconds;
+
+    if (isPause) {
+      const result = await pauseAttendance(targetUserId);
+      if (!result.paused) {
+        await interaction.editReply(result.reason === "already_paused"
+          ? "⚠️ Ce policier est déjà en pause."
+          : "⚠️ Ce policier n’a pas de service actif.");
+        return true;
+      }
+      session = result.session;
+      penaltyRequestedSeconds = getForcedPausePenaltySeconds();
+    } else {
+      const result = await stopAttendance(targetUserId, interaction.user.id, "forced_by_high_command");
+      if (!result.stopped) {
+        await interaction.editReply("⚠️ Ce policier n’a plus de service actif.");
+        return true;
+      }
+      session = result.session;
+      penaltyRequestedSeconds = getForcedEndPenaltySeconds();
+    }
+
+    let penaltyRemovedSeconds = 0;
+    let penaltyError = null;
+    if (penaltyRequestedSeconds > 0) {
+      try {
+        const penalty = await removeAttendanceTime({
+          userId: targetUserId,
+          seconds: penaltyRequestedSeconds,
+          reason: isPause
+            ? "Pénalité automatique — pause forcée depuis Discord"
+            : "Pénalité automatique — fin forcée depuis Discord",
+          moderatorId: interaction.user.id,
+        });
+        penaltyRemovedSeconds = Number(penalty.removedSeconds || 0);
+      } catch (error) {
+        if (Number(error?.status) !== 409) penaltyError = error?.message || String(error);
+      }
+    }
+
+    let remarkSent = false;
+    let remarkError = null;
+    try {
+      await sendForcedRemark(client, {
+        userId: targetUserId,
+        moderatorId: interaction.user.id,
+        remark,
+        kind: isPause ? "pause" : "end",
+        penaltyRemovedSeconds,
+      });
+      remarkSent = true;
+    } catch (error) {
+      remarkError = error?.message || String(error);
+      console.error("❌ Envoi dans le salon remarques impossible :", remarkError);
+    }
+
+    if (!isPause) {
+      await sendAttendanceLog(client, {
+        userId: targetUserId,
+        type: "force",
+        startedAt: session.started_at,
+        endedAt: session.ended_at,
+        durationSeconds: session.duration_seconds,
+        pausedSeconds: session.paused_seconds,
+        pauseCount: session.pause_count,
+        moderatorId: interaction.user.id,
+      }).catch(() => {});
+    }
+
+    await refreshAttendancePanel(client).catch(() => {});
+
+    const penaltyText = penaltyRemovedSeconds > 0
+      ? `Pénalité retirée : **${formatDuration(penaltyRemovedSeconds)}**.`
+      : "Aucune heure disponible à retirer.";
+
+    await interaction.editReply(
+      `${isPause ? "☕ Le policier a été mis en pause de force." : "🛑 Le service a été terminé de force."}\n` +
+      `➖ ${penaltyText}\n` +
+      (remarkSent
+        ? "✅ Le message a été envoyé dans le salon des remarques."
+        : `❌ Le message n’a pas été envoyé : ${remarkError}`) +
+      (penaltyError ? `\n⚠️ Erreur de pénalité : ${penaltyError}` : "")
+    );
     return true;
   }
 
