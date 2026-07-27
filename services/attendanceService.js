@@ -7,6 +7,9 @@ const {
   PermissionFlagsBits,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } = require("discord.js");
 
 const {
@@ -24,6 +27,7 @@ const {
 
 const ATTENDANCE_CHANNEL_ID = String(process.env.ATTENDANCE_CHANNEL_ID || "").trim();
 const ATTENDANCE_LOG_CHANNEL_ID = String(process.env.ATTENDANCE_LOG_CHANNEL_ID || "").trim();
+const ATTENDANCE_REMARK_CHANNEL_ID = String(process.env.ATTENDANCE_REMARK_CHANNEL_ID || "").trim();
 const ROLE_POLICE = String(process.env.ROLE_POLICE || "").trim();
 const ROLE_HIGH_COMMAND = String(
   process.env.ROLE_HIGH_COMMAND || ""
@@ -34,6 +38,12 @@ const PANEL_SETTING_KEY = "attendance_panel_message_id";
 function getForcedEndPenaltySeconds() {
   const raw = Number(process.env.FORCED_END_PENALTY_HOURS ?? 5);
   const hours = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), 24) : 5;
+  return Math.round(hours * 3600);
+}
+
+function getForcedPausePenaltySeconds() {
+  const raw = Number(process.env.FORCED_PAUSE_PENALTY_HOURS ?? 1);
+  const hours = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), 24) : 1;
   return Math.round(hours * 3600);
 }
 
@@ -529,7 +539,8 @@ async function buildHighCommandPanel(client, guild, selectedUserId = null) {
     value: selectedSession
       ? [
           `✅ **${selectedSession.displayName}** est sélectionné.`,
-          "Clique sur **Forcer la fin du service** pour confirmer.",
+          "Choisis **Forcer la fin** ou **Forcer la pause**.",
+          "Une remarque obligatoire te sera demandée avant confirmation.",
           "⚠️ Cette action sera enregistrée dans les logs administratifs.",
         ].join("\n")
       : [
@@ -564,11 +575,17 @@ async function buildHighCommandPanel(client, guild, selectedUserId = null) {
 
   const actionRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(selectedSession ? `attendance:force-confirm:${selectedSession.session.user_id}` : "attendance:force-confirm:none")
-      .setLabel("Forcer la fin du service")
+      .setCustomId(selectedSession ? `attendance:force-end-open:${selectedSession.session.user_id}` : "attendance:force-end-open:none")
+      .setLabel("Forcer la fin")
       .setEmoji("🛑")
       .setStyle(ButtonStyle.Danger)
       .setDisabled(!selectedSession),
+    new ButtonBuilder()
+      .setCustomId(selectedSession ? `attendance:force-pause-open:${selectedSession.session.user_id}` : "attendance:force-pause-open:none")
+      .setLabel("Forcer la pause")
+      .setEmoji("☕")
+      .setStyle(ButtonStyle.Primary)
+      .setDisabled(!selectedSession || Boolean(selectedSession?.session?.paused_at)),
     new ButtonBuilder()
       .setCustomId("attendance:admin-refresh")
       .setLabel("Actualiser la liste")
@@ -649,6 +666,167 @@ async function handleAttendanceSelect(
   return true;
 }
 
+
+async function sendForcedRemark(client, { userId, moderatorId, remark, kind, penaltyRemovedSeconds }) {
+  const channel = await fetchTextChannel(client, ATTENDANCE_REMARK_CHANNEL_ID);
+  if (!channel) {
+    throw new Error("Salon de remarques introuvable. Configure ATTENDANCE_REMARK_CHANNEL_ID et vérifie les permissions du bot.");
+  }
+
+  const isPause = kind === "pause";
+  const embed = new EmbedBuilder()
+    .setColor(isPause ? 0xf39c12 : 0xe74c3c)
+    .setTitle(isPause ? "☕ تنبيه إداري — استراحة إجبارية" : "⚠️ تنبيه إداري — إنهاء خدمة إجباري")
+    .setDescription(isPause
+      ? `تم تغيير حالة <@${userId}> إلى **استراحة** بواسطة القيادة.`
+      : `تم إنهاء خدمة <@${userId}> إجبارياً بواسطة القيادة.`)
+    .addFields(
+      {
+        name: "⏳ خصم الساعات",
+        value: penaltyRemovedSeconds > 0
+          ? `تم خصم **${formatDuration(penaltyRemovedSeconds)}** من مجموع ساعاتك.`
+          : "لم تتوفر ساعات كافية للخصم.",
+        inline: false,
+      },
+      { name: "📝 ملاحظة القيادة", value: remark.slice(0, 1024), inline: false },
+      { name: "🛡 بواسطة", value: `<@${moderatorId}>`, inline: true }
+    )
+    .setFooter({ text: "Harmony Police Department • Administration" })
+    .setTimestamp();
+
+  await channel.send({
+    content: `<@${userId}>`,
+    embeds: [embed],
+    allowedMentions: { parse: [], users: [String(userId)] },
+  });
+}
+
+async function handleAttendanceModalButton(interaction) {
+  if (!interaction.isButton() || !interaction.customId?.startsWith("attendance:")) return false;
+  const [, action, targetUserId] = interaction.customId.split(":");
+  if (!["force-end-open", "force-pause-open", "force-end-modal", "force-pause-modal"].includes(action)) return false;
+
+  if (!interaction.guild || !memberIsHighCommand(interaction.member, interaction)) {
+    await interaction.reply({ content: "❌ Cette action est réservée au High Command.", flags: MessageFlags.Ephemeral });
+    return true;
+  }
+  if (!/^\d{16,22}$/.test(String(targetUserId || ""))) {
+    await interaction.reply({ content: "❌ Identifiant du policier invalide.", flags: MessageFlags.Ephemeral });
+    return true;
+  }
+
+  const isPause = action === "force-pause-open" || action === "force-pause-modal";
+  const modal = new ModalBuilder()
+    .setCustomId(`attendance:${isPause ? "force-pause-submit" : "force-end-submit"}:${targetUserId}`)
+    .setTitle(isPause ? "Forcer la pause" : "Forcer la fin du service");
+  const remarkInput = new TextInputBuilder()
+    .setCustomId("remark")
+    .setLabel("Remarque / motif obligatoire")
+    .setStyle(TextInputStyle.Paragraph)
+    .setMinLength(3)
+    .setMaxLength(500)
+    .setRequired(true)
+    .setPlaceholder("Explique pourquoi cette action est forcée...");
+  modal.addComponents(new ActionRowBuilder().addComponents(remarkInput));
+  await interaction.showModal(modal);
+  return true;
+}
+
+async function handleAttendanceModalSubmit(interaction, client) {
+  if (!interaction.isModalSubmit() || !interaction.customId?.startsWith("attendance:")) return false;
+  const [, action, targetUserId] = interaction.customId.split(":");
+  if (action !== "force-end-submit" && action !== "force-pause-submit") return false;
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  if (!interaction.guild || !memberIsHighCommand(interaction.member, interaction)) {
+    await interaction.editReply("❌ Cette action est réservée au High Command.");
+    return true;
+  }
+
+  const remark = String(interaction.fields.getTextInputValue("remark") || "").trim();
+  if (!remark || remark.length > 500) {
+    await interaction.editReply("❌ La remarque est obligatoire et limitée à 500 caractères.");
+    return true;
+  }
+
+  const isPause = action === "force-pause-submit";
+  let session;
+  let penaltyRequestedSeconds;
+
+  if (isPause) {
+    const result = await pauseAttendance(targetUserId);
+    if (!result.paused) {
+      await interaction.editReply(result.reason === "already_paused" ? "⚠️ Ce policier est déjà en pause." : "⚠️ Ce policier n’a pas de service actif.");
+      return true;
+    }
+    session = result.session;
+    penaltyRequestedSeconds = getForcedPausePenaltySeconds();
+  } else {
+    const result = await stopAttendance(targetUserId, interaction.user.id, "forced_by_high_command");
+    if (!result.stopped) {
+      await interaction.editReply("⚠️ Ce policier n’a plus de service actif.");
+      return true;
+    }
+    session = result.session;
+    penaltyRequestedSeconds = getForcedEndPenaltySeconds();
+  }
+
+  let penaltyRemovedSeconds = 0;
+  let penaltyError = null;
+  if (penaltyRequestedSeconds > 0) {
+    try {
+      const penalty = await removeAttendanceTime({
+        userId: targetUserId,
+        seconds: penaltyRequestedSeconds,
+        reason: `${isPause ? "Pénalité automatique — pause forcée" : "Pénalité automatique — fin forcée"} : ${remark}`,
+        moderatorId: interaction.user.id,
+      });
+      penaltyRemovedSeconds = Number(penalty.removedSeconds || 0);
+    } catch (error) {
+      if (Number(error?.status) !== 409) penaltyError = error?.message || String(error);
+    }
+  }
+
+  let remarkSent = false;
+  let remarkError = null;
+  try {
+    await sendForcedRemark(client, {
+      userId: targetUserId,
+      moderatorId: interaction.user.id,
+      remark,
+      kind: isPause ? "pause" : "end",
+      penaltyRemovedSeconds,
+    });
+    remarkSent = true;
+  } catch (error) {
+    remarkError = error?.message || String(error);
+    console.error("❌ Envoi dans le salon remarques impossible :", remarkError);
+  }
+
+  if (!isPause) {
+    await sendAttendanceLog(client, {
+      userId: targetUserId,
+      type: "force",
+      startedAt: session.started_at,
+      endedAt: session.ended_at,
+      durationSeconds: session.duration_seconds,
+      pausedSeconds: session.paused_seconds,
+      pauseCount: session.pause_count,
+      moderatorId: interaction.user.id,
+    }).catch(() => {});
+  }
+  await refreshAttendancePanel(client).catch(() => {});
+
+  const penaltyText = penaltyRemovedSeconds > 0 ? `Pénalité retirée : **${formatDuration(penaltyRemovedSeconds)}**.` : "Aucune heure disponible à retirer.";
+  await interaction.editReply(
+    `${isPause ? "☕ Le policier a été mis en pause de force." : "🛑 Le service a été terminé de force."}\n` +
+    `➖ ${penaltyText}\n` +
+    (remarkSent ? "✅ La remarque a été envoyée dans le salon des remarques." : `❌ La remarque n’a pas été envoyée : ${remarkError}`) +
+    (penaltyError ? `\n⚠️ Erreur de pénalité : ${penaltyError}` : "")
+  );
+  return true;
+}
+
 async function handleAttendanceButton(interaction, client) {
   if (!interaction.customId?.startsWith("attendance:")) return false;
 
@@ -676,7 +854,7 @@ async function handleAttendanceButton(interaction, client) {
     return true;
   }
 
-  const isAdminAction = action === "admin" || action === "admin-refresh" || action === "force-confirm";
+  const isAdminAction = action === "admin" || action === "admin-refresh" || action === "force-end-open" || action === "force-pause-open";
 
   if (!memberIsPolice(interaction.member) && !isAdminAction) {
     await interaction.editReply(
@@ -704,119 +882,40 @@ async function handleAttendanceButton(interaction, client) {
     return true;
   }
 
-  if (action === "force-confirm") {
-    if (
-      !memberIsHighCommand(
-        interaction.member,
-        interaction
-      )
-    ) {
-      await interaction.editReply(
-        "❌ Cette action est réservée au High Command."
-      );
+  if (action === "force-end-open" || action === "force-pause-open") {
+    if (!memberIsHighCommand(interaction.member, interaction)) {
+      await interaction.editReply("❌ Cette action est réservée au High Command.");
       return true;
     }
 
     const targetUserId = String(customIdParts[2] || "").trim();
-
     if (!/^\d{16,22}$/.test(targetUserId)) {
       const payload = await buildHighCommandPanel(client, interaction.guild);
-      await interaction.editReply({
-        content: "⚠️ Sélectionne d’abord un agent dans le menu.",
-        ...payload,
-      });
+      await interaction.editReply({ content: "⚠️ Sélectionne d’abord un agent dans le menu.", ...payload });
       return true;
     }
 
-    const result = await stopAttendance(
-      targetUserId,
-      interaction.user.id,
-      "forced_by_high_command"
-    );
-
-    if (!result.stopped) {
-      await interaction.editReply(
-        "⚠️ Ce policier n'a plus de service actif."
-      );
-
-      await refreshAttendancePanel(client);
-      return true;
-    }
-
-    const penaltyRequestedSeconds = getForcedEndPenaltySeconds();
-    let penaltyRemovedSeconds = 0;
-    let penaltyError = null;
-
-    if (penaltyRequestedSeconds > 0) {
-      try {
-        const penalty = await removeAttendanceTime({
-          userId: targetUserId,
-          seconds: penaltyRequestedSeconds,
-          reason: "Pénalité automatique — oubli de fin de service (panneau Discord)",
-          moderatorId: interaction.user.id,
-        });
-        penaltyRemovedSeconds = Number(penalty.removedSeconds || 0);
-      } catch (error) {
-        // Le service est quand même terminé, même si aucune heure n'est disponible.
-        if (Number(error?.status) !== 409) {
-          penaltyError = error?.message || String(error);
-          console.error("❌ Erreur pénalité de fin forcée :", penaltyError);
-        }
-      }
-    }
-
-    const refreshedAdminPayload = await buildHighCommandPanel(
-      client,
-      interaction.guild
-    );
-
-    const penaltyText = penaltyRemovedSeconds > 0
-      ? `➖ Pénalité retirée : **${formatDuration(penaltyRemovedSeconds)}**.`
-      : "⚠️ Aucune heure disponible à retirer.";
-
+    // showModal doit être appelé avant tout defer/reply. Comme le gestionnaire a déjà différé,
+    // on ouvre le modal via une nouvelle interaction dédiée depuis un bouton non différé.
     await interaction.editReply({
-      content:
-        `✅ Le service de <@${targetUserId}> a été terminé de force.\n` +
-        `⏱️ Temps de la session : **${formatDuration(result.session.duration_seconds)}**.\n` +
-        `${penaltyText}` +
-        (penaltyError ? `\n⚠️ Erreur de pénalité : ${penaltyError}` : ""),
-      ...refreshedAdminPayload,
+      content: action === "force-end-open"
+        ? `📝 Clique de nouveau sur le bouton ci-dessous pour saisir la remarque de fin forcée de <@${targetUserId}>.`
+        : `📝 Clique de nouveau sur le bouton ci-dessous pour saisir la remarque de pause forcée de <@${targetUserId}>.`,
+      components: [new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+          .setCustomId(`attendance:${action === "force-end-open" ? "force-end-modal" : "force-pause-modal"}:${targetUserId}`)
+          .setLabel(action === "force-end-open" ? "Saisir la remarque — fin" : "Saisir la remarque — pause")
+          .setStyle(action === "force-end-open" ? ButtonStyle.Danger : ButtonStyle.Primary)
+          .setEmoji(action === "force-end-open" ? "🛑" : "☕")
+      )],
+      allowedMentions: { parse: [] },
     });
-
-    const forceResults =
-      await Promise.allSettled([
-        sendAttendanceLog(client, {
-          userId: targetUserId,
-          type: "force",
-          startedAt:
-            result.session.started_at,
-          endedAt:
-            result.session.ended_at,
-          durationSeconds:
-            result.session.duration_seconds,
-          pausedSeconds:
-            result.session.paused_seconds,
-          pauseCount:
-            result.session.pause_count,
-          moderatorId:
-            interaction.user.id,
-        }),
-        refreshAttendancePanel(client),
-      ]);
-
-    for (const resultItem of forceResults) {
-      if (
-        resultItem.status === "rejected"
-      ) {
-        console.error(
-          "❌ Erreur après fin de service forcée :",
-          resultItem.reason?.message ||
-            resultItem.reason
-        );
-      }
-    }
-
     return true;
+  }
+
+  if (action === "force-end-modal" || action === "force-pause-modal") {
+    // Cette branche est traitée avant le defer au début de la fonction.
+    return false;
   }
 
   if (action === "start") {
@@ -1113,5 +1212,7 @@ module.exports = {
   refreshAttendancePanel,
   handleAttendanceButton,
   handleAttendanceSelect,
+  handleAttendanceModalButton,
+  handleAttendanceModalSubmit,
   formatDuration,
 };

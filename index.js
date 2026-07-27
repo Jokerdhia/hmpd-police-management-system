@@ -14,6 +14,8 @@ const {
   refreshAttendancePanel,
   handleAttendanceButton,
   handleAttendanceSelect,
+  handleAttendanceModalButton,
+  handleAttendanceModalSubmit,
 } = require("./services/attendanceService");
 
 const {
@@ -820,6 +822,31 @@ client.once(Events.ClientReady, async () => {
 */
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isModalSubmit()) {
+    try {
+      const handled = await handleAttendanceModalSubmit(interaction, client);
+      if (handled) return;
+    } catch (error) {
+      console.error("❌ Erreur formulaire administratif de présence :", error);
+      const payload = { content: "❌ Impossible de traiter cette action administrative.", flags: MessageFlags.Ephemeral };
+      if (interaction.deferred || interaction.replied) await interaction.editReply(payload).catch(() => {});
+      else await interaction.reply(payload).catch(() => {});
+      return;
+    }
+  }
+
+  if (interaction.isButton()) {
+    try {
+      const handled = await handleAttendanceModalButton(interaction);
+      if (handled) return;
+    } catch (error) {
+      console.error("❌ Erreur ouverture du formulaire de présence :", error);
+      const payload = { content: "❌ Impossible d’ouvrir le formulaire.", flags: MessageFlags.Ephemeral };
+      if (interaction.deferred || interaction.replied) await interaction.editReply(payload).catch(() => {});
+      else await interaction.reply(payload).catch(() => {});
+      return;
+    }
+  }
   if (interaction.isStringSelectMenu()) {
     try {
       const handled =
