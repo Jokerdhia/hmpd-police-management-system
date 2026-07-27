@@ -2,7 +2,7 @@ const express=require("express");
 const {getAttendanceSessions,getAttendanceActive,getAttendanceTotalsDashboard,getAttendanceDaily}=require("../dashboardDatabase");
 const {listOfficers}=require("../services/officerService");
 const {requireHighCommand,getModeratorId}=require("../auth/auth");
-const {stopAttendance,pauseAttendance,removeAttendanceTime}=require("../../database");
+const {startAttendance,stopAttendance,pauseAttendance,resumeAttendance,removeAttendanceTime}=require("../../database");
 const {sendChannelMessage}=require("../services/discordService");
 const router=express.Router();
 function getLogChannelId(){return String(process.env.ATTENDANCE_LOG_CHANNEL_ID||"").trim()}
@@ -34,8 +34,34 @@ router.get("/overview",async(req,res,next)=>{try{
   const rows=officers.map(o=>{const a=activeMap.get(String(o.user_id));return {...o,attendance_status:!a?"offline":a.paused_at?"paused":"active",session_seconds:a?liveSeconds(a):0,started_at:a?.started_at||null,paused_at:a?.paused_at||null,today_seconds:seconds(dayMap.get(String(o.user_id))?.total_seconds),week_seconds:seconds(weekMap.get(String(o.user_id))?.total_seconds),month_seconds:seconds(monthMap.get(String(o.user_id))?.total_seconds),week_sessions:Number(weekMap.get(String(o.user_id))?.sessions||0)}});
   const activeRows=active.map(x=>enrich({...x,session_seconds:liveSeconds(x)},map));
   const totalToday=day.reduce((a,x)=>a+seconds(x.total_seconds),0),totalWeek=week.reduce((a,x)=>a+seconds(x.total_seconds),0),totalMonth=month.reduce((a,x)=>a+seconds(x.total_seconds),0);
-  res.json({success:true,summary:{active:active.filter(x=>!x.paused_at).length,paused:active.filter(x=>x.paused_at).length,offline:Math.max(officers.length-active.length,0),totalToday,totalWeek,totalMonth,officers:officers.length,forcedEndPenaltySeconds:getForcedEndPenaltySeconds(),forcedPausePenaltySeconds:getForcedPausePenaltySeconds()},officers:rows,active:activeRows,rankings:{day:day.slice(0,10).map(x=>enrich(x,map)),week:week.slice(0,10).map(x=>enrich(x,map)),month:month.slice(0,10).map(x=>enrich(x,map))},history:history.map(x=>enrich(x,map)),daily,permissions:{canForceStop:Boolean(req.session?.user?.isHighCommand)}});
+  res.json({success:true,summary:{active:active.filter(x=>!x.paused_at).length,paused:active.filter(x=>x.paused_at).length,offline:Math.max(officers.length-active.length,0),totalToday,totalWeek,totalMonth,officers:officers.length,forcedEndPenaltySeconds:getForcedEndPenaltySeconds(),forcedPausePenaltySeconds:getForcedPausePenaltySeconds()},officers:rows,active:activeRows,rankings:{day:day.slice(0,10).map(x=>enrich(x,map)),week:week.slice(0,10).map(x=>enrich(x,map)),month:month.slice(0,10).map(x=>enrich(x,map))},history:history.map(x=>enrich(x,map)),daily,permissions:{canForceStop:Boolean(req.session?.user?.isHighCommand)},currentUserId:String(req.session?.user?.id||"")});
 }catch(e){next(e)}});
+
+async function sendSelfLog(action,userId,result){
+  const channelId=getLogChannelId();if(!channelId)return;
+  const labels={start:["🟢 PRISE DE SERVICE",3066993],pause:["☕ MISE EN PAUSE",16753920],resume:["▶️ REPRISE DE SERVICE",3447003],stop:["🔴 FIN DE SERVICE",15158332]};
+  const [title,color]=labels[action]||["PRÉSENCE",3447003];
+  const fields=[{name:"👮 Policier",value:`<@${userId}>`,inline:true}];
+  if(result?.session?.started_at)fields.push({name:"🕒 Début",value:`<t:${Math.floor(new Date(result.session.started_at).getTime()/1000)}:F>`,inline:true});
+  if(action==="stop"&&result?.session){fields.push({name:"⏱ Temps travaillé",value:`${Math.floor(Number(result.session.duration_seconds||0)/3600)} h ${Math.floor((Number(result.session.duration_seconds||0)%3600)/60)} min`,inline:true});}
+  await sendChannelMessage(channelId,{embeds:[{color,title,fields,footer:{text:"Harmony Police Department • Dashboard"},timestamp:new Date().toISOString()}],allowed_mentions:{parse:[]}}).catch(err=>console.error("Log présence personnelle:",err.message));
+}
+router.post("/me/:action",async(req,res,next)=>{try{
+  const userId=String(req.session?.user?.id||"").trim();
+  if(!/^\d{16,22}$/.test(userId))return res.status(401).json({success:false,message:"Session Discord invalide."});
+  const action=String(req.params.action||"");let result;
+  if(action==="start")result=await startAttendance(userId,userId);
+  else if(action==="pause")result=await pauseAttendance(userId);
+  else if(action==="resume")result=await resumeAttendance(userId);
+  else if(action==="stop")result=await stopAttendance(userId,userId,"manual_dashboard");
+  else return res.status(400).json({success:false,message:"Action invalide."});
+  const ok=result.started||result.paused||result.resumed||result.stopped;
+  if(!ok){const messages={already_active:"Tu es déjà en service.",already_paused:"Tu es déjà en pause.",not_paused:"Tu n’es pas en pause.",not_active:"Tu n’as aucun service actif."};return res.status(409).json({success:false,message:messages[result.reason]||"Action impossible."});}
+  await sendSelfLog(action,userId,result);
+  const messages={start:"Tu es maintenant en service.",pause:"Ta pause a été enregistrée.",resume:"Tu as repris ton service.",stop:"Ta fin de service a été enregistrée."};
+  res.json({success:true,message:messages[action],session:result.session});
+}catch(e){next(e)}});
+
 router.post("/:userId/force-stop",requireHighCommand,async(req,res,next)=>{try{
   const userId=String(req.params.userId||"").trim();if(!/^\d{16,22}$/.test(userId)){const e=new Error("Identifiant invalide.");e.status=400;e.publicMessage=e.message;throw e}
   const remark=String(req.body?.remark||"").trim();
