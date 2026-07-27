@@ -20,9 +20,10 @@
 
       <nav class="nav">
         <button class="nav-item active" data-page="dashboard"><span>▦</span>Tableau de bord</button>
-        <button class="nav-item" data-page="officers"><span>♟</span>Policiers</button>
         <button class="nav-item" data-page="attendance"><span>◉</span>Présence</button>
+        <button class="nav-item" data-page="officers"><span>♟</span>Policiers</button>
         <button class="nav-item" data-page="leaderboard"><span>★</span>Classement</button>
+        <button class="nav-item" data-page="messages"><span>✉</span>Mes messages</button>
         <button class="nav-item" data-page="activity"><span>≡</span>Activité</button>
       </nav>
 
@@ -110,7 +111,7 @@
       <section id="officersPage" class="page">
         <article class="panel">
           <div class="panel-head panel-head-responsive">
-            <div><h2>Dossiers policiers</h2><p>Profils, points, notes et sanctions</p></div>
+            <div><h2>Dossiers policiers</h2><p>Profils, points et notes administratives</p></div>
             <input class="search" id="officerSearch" type="search" placeholder="Rechercher nom, grade, ID...">
           </div>
           <div class="table-scroll">
@@ -169,6 +170,12 @@
           <article class="panel"><div class="panel-head"><div><h2>Historique récent</h2><p>Dernières sessions terminées</p></div></div><div id="attendanceHistory" class="attendance-history"></div></article>
         </div>
       </section>
+      <section id="messagesPage" class="page">
+        <article class="panel">
+          <div class="panel-head"><div><h2>Mes messages administratifs</h2><p>Notes reçues dans le MDT Police</p></div></div>
+          <div id="myMessagesList" class="record-list"></div>
+        </article>
+      </section>
       <section id="activityPage" class="page">
         <article class="panel">
           <div class="panel-head"><div><h2>Journal d'activité</h2><p>Historique récent des modifications</p></div></div>
@@ -225,18 +232,8 @@
         <button class="icon-btn" id="closeRecordButton">✕</button>
       </header>
       <form id="recordForm" class="form">
-        <input id="recordType" type="hidden">
         <input id="recordUserId" type="hidden">
-        <label id="sanctionTypeGroup" class="hidden">Type de sanction
-          <select id="sanctionType">
-            <option>Avertissement</option>
-            <option>Suspension</option>
-            <option>Rétrogradation disciplinaire</option>
-            <option>Conseil de discipline</option>
-          </select>
-        </label>
-        <label><span id="recordContentLabel">Contenu</span><textarea id="recordContent" minlength="3" maxlength="1000" required></textarea></label>
-        <label id="expiresGroup" class="hidden">Date de fin<input id="recordExpires" type="date"></label>
+        <label><span id="recordContentLabel">Note administrative</span><textarea id="recordContent" minlength="3" maxlength="1000" placeholder="Écris la note qui sera enregistrée et envoyée au policier..." required></textarea></label>
         <div id="recordFormError" class="form-error hidden"></div>
         <div class="form-actions">
           <button type="button" class="btn btn-secondary" id="cancelRecordButton">Annuler</button>

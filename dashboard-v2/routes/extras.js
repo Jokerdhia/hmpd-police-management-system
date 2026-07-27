@@ -1,5 +1,4 @@
 const express = require("express");
-
 const {
   listNotes,
   addNote,
@@ -86,6 +85,25 @@ router.get("/activity", async (request, response, next) => {
   }
 });
 
+router.get("/me/notes", async (request, response, next) => {
+  try {
+    const userId = normalizeDiscordId(
+      getModeratorId(request),
+      "Identifiant du policier connecté"
+    );
+
+    const notes = await listNotes(userId);
+
+    return response.status(200).json({
+      success: true,
+      total: notes.length,
+      notes,
+    });
+  } catch (error) {
+    return next(error);
+  }
+});
+
 router.get("/officers/:userId/notes", async (request, response, next) => {
   try {
     const userId = normalizeDiscordId(
@@ -122,15 +140,18 @@ router.post(
         "La note"
       );
 
+      const moderatorId = getModeratorId(request);
+
       const result = await addNote({
         userId,
         content,
-        authorId: getModeratorId(request),
+        authorId: moderatorId,
       });
 
       return response.status(201).json({
         success: true,
-        message: "Note ajoutée.",
+        message: "Note ajoutée dans le MDT du policier.",
+        deliveredInMdt: true,
         result,
       });
     } catch (error) {

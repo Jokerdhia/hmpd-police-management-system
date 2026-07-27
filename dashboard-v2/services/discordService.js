@@ -597,6 +597,37 @@ async function listGuildMembers() {
   return members;
 }
 
+
+/**
+ * Envoie un message privé à un utilisateur Discord.
+ */
+async function sendDirectMessage(userId, message) {
+  const safeUserId = normalizeDiscordId(
+    userId,
+    "Identifiant du policier"
+  );
+
+  const dmChannel = await rest.post(
+    Routes.userChannels(),
+    { body: { recipient_id: safeUserId } }
+  );
+
+  const channelId = String(dmChannel?.id || "").trim();
+
+  if (!channelId) {
+    throw new Error("Impossible de créer le message privé Discord.");
+  }
+
+  const body = typeof message === "string"
+    ? { content: message }
+    : message;
+
+  return rest.post(
+    Routes.channelMessages(channelId),
+    { body }
+  );
+}
+
 /**
  * Vide entièrement le cache des membres.
  */
@@ -619,6 +650,7 @@ module.exports = {
   listGuildMembers,
   setMemberGradeRole,
   sendChannelMessage,
+  sendDirectMessage,
   clearMemberCache,
   clearMemberFromCache,
   getMemberCacheInfo,
