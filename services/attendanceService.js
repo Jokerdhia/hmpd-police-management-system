@@ -17,6 +17,7 @@ const {
   getActiveAttendance,
   getActiveAttendances,
   getAttendanceTotals,
+  removeAttendanceTime,
   setBotSetting,
   getBotSetting,
 } = require("../database");
@@ -29,6 +30,12 @@ const ROLE_HIGH_COMMAND = String(
 ).trim();
 
 const PANEL_SETTING_KEY = "attendance_panel_message_id";
+
+function getForcedEndPenaltySeconds() {
+  const raw = Number(process.env.FORCED_END_PENALTY_HOURS ?? 5);
+  const hours = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), 24) : 5;
+  return Math.round(hours * 3600);
+}
 
 function formatDuration(totalSeconds) {
   const seconds = Math.max(0, Number(totalSeconds) || 0);
@@ -736,15 +743,43 @@ async function handleAttendanceButton(interaction, client) {
       return true;
     }
 
+    const penaltyRequestedSeconds = getForcedEndPenaltySeconds();
+    let penaltyRemovedSeconds = 0;
+    let penaltyError = null;
+
+    if (penaltyRequestedSeconds > 0) {
+      try {
+        const penalty = await removeAttendanceTime({
+          userId: targetUserId,
+          seconds: penaltyRequestedSeconds,
+          reason: "Pénalité automatique — oubli de fin de service (panneau Discord)",
+          moderatorId: interaction.user.id,
+        });
+        penaltyRemovedSeconds = Number(penalty.removedSeconds || 0);
+      } catch (error) {
+        // Le service est quand même terminé, même si aucune heure n'est disponible.
+        if (Number(error?.status) !== 409) {
+          penaltyError = error?.message || String(error);
+          console.error("❌ Erreur pénalité de fin forcée :", penaltyError);
+        }
+      }
+    }
+
     const refreshedAdminPayload = await buildHighCommandPanel(
       client,
       interaction.guild
     );
 
+    const penaltyText = penaltyRemovedSeconds > 0
+      ? `➖ Pénalité retirée : **${formatDuration(penaltyRemovedSeconds)}**.`
+      : "⚠️ Aucune heure disponible à retirer.";
+
     await interaction.editReply({
       content:
         `✅ Le service de <@${targetUserId}> a été terminé de force.\n` +
-        `⏱️ Temps comptabilisé : **${formatDuration(result.session.duration_seconds)}**.`,
+        `⏱️ Temps de la session : **${formatDuration(result.session.duration_seconds)}**.\n` +
+        `${penaltyText}` +
+        (penaltyError ? `\n⚠️ Erreur de pénalité : ${penaltyError}` : ""),
       ...refreshedAdminPayload,
     });
 
