@@ -261,6 +261,27 @@ app.get(
 );
 
 /* =========================================================
+   ALIAS DU DASHBOARD
+========================================================= */
+
+/*
+ * Anciennes adresses et liens courants.
+ * La page principale reste protégée par requireAuth après
+ * la redirection vers /.
+ */
+[
+  "/dashboard",
+  "/dashboard/",
+  "/dashboard-v2",
+  "/dashboard-v2/",
+  "/index.html",
+].forEach((dashboardPath) => {
+  app.get(dashboardPath, (request, response) => {
+    return response.redirect(302, "/");
+  });
+});
+
+/* =========================================================
    AUTHENTIFICATION OBLIGATOIRE
 ========================================================= */
 
