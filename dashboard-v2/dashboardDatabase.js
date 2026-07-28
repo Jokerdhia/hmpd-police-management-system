@@ -1,7 +1,14 @@
 const { Pool } = require("pg");
-const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+const RAW_DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+const DATABASE_URL = RAW_DATABASE_URL.replace(
+  /sslmode=(prefer|require|verify-ca)(?=&|$)/i,
+  "sslmode=verify-full"
+);
 if (!DATABASE_URL) throw new Error("DATABASE_URL est obligatoire pour Neon PostgreSQL.");
-const pool = new Pool({ connectionString: DATABASE_URL, ssl: DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false } });
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: DATABASE_URL.includes("localhost") ? false : undefined,
+});
 const ready = pool.query(`
   CREATE TABLE IF NOT EXISTS officer_notes (
     id BIGSERIAL PRIMARY KEY, user_id TEXT NOT NULL, content TEXT NOT NULL,

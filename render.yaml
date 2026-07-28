@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: hmpd-points-bot
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /
+    envVars:
+      - key: NODE_ENV
+        value: production

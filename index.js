@@ -1,5 +1,45 @@
 require("dotenv").config();
 
+/*
+|--------------------------------------------------------------------------
+| Serveur HTTP Render
+|--------------------------------------------------------------------------
+| Render exige qu'un Web Service écoute sur process.env.PORT.
+| start-render.js désactive ce serveur léger, car le dashboard ouvre déjà
+| le port lui-même.
+*/
+
+if (process.env.DISABLE_HEALTH_SERVER !== "true") {
+  const http = require("http");
+  const port = Number.parseInt(process.env.PORT, 10) || 10000;
+  const host = "0.0.0.0";
+
+  const healthServer = http.createServer((request, response) => {
+    const isHealthRoute = request.url === "/" || request.url === "/health";
+
+    response.writeHead(isHealthRoute ? 200 : 404, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "no-store",
+    });
+
+    response.end(JSON.stringify({
+      status: isHealthRoute ? "ok" : "not_found",
+      service: "HMPD Points Bot",
+      discord: "starting",
+    }));
+  });
+
+  healthServer.on("error", (error) => {
+    console.error("❌ Erreur du serveur HTTP Render :", error);
+    process.exit(1);
+  });
+
+  healthServer.listen(port, host, () => {
+    console.log(`✅ Serveur HTTP Render actif sur ${host}:${port}`);
+  });
+}
+
+
 const {
   Client,
   GatewayIntentBits,

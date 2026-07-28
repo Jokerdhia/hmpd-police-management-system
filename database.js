@@ -1,13 +1,17 @@
 const { Pool } = require("pg");
 
-const DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+const RAW_DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
+const DATABASE_URL = RAW_DATABASE_URL.replace(
+  /sslmode=(prefer|require|verify-ca)(?=&|$)/i,
+  "sslmode=verify-full"
+);
 if (!DATABASE_URL) {
   throw new Error("DATABASE_URL est obligatoire pour utiliser Neon PostgreSQL.");
 }
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  ssl: DATABASE_URL.includes("localhost") ? false : { rejectUnauthorized: false },
+  ssl: DATABASE_URL.includes("localhost") ? false : undefined,
   max: Number.parseInt(process.env.DATABASE_POOL_MAX, 10) || 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
