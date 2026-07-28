@@ -5,6 +5,7 @@ require("dotenv").config({
 const path = require("path");
 const express = require("express");
 const session = require("express-session");
+const sessionStore = require("./sessionStore");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 
@@ -157,6 +158,8 @@ app.use(
 
 app.use(
   session({
+    store: sessionStore,
+
     name: SESSION_COOKIE_NAME,
 
     secret:
