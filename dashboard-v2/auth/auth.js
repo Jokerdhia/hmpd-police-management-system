@@ -351,6 +351,19 @@ function saveSession(request) {
   );
 }
 
+function regenerateSession(request) {
+  return new Promise((resolve, reject) => {
+    request.session.regenerate((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
+
 /* =========================================================
    REFUS D'ACCÈS
 ========================================================= */
@@ -685,6 +698,9 @@ function registerAuthRoutes(app) {
               "Accès refusé : tu dois posséder le rôle Police."
             );
         }
+
+        // Nouvelle session après authentification : réduit le risque de fixation de session.
+        await regenerateSession(request);
 
         request.session.user = {
           id: String(user.id),

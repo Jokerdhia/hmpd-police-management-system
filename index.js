@@ -367,7 +367,10 @@ async function sendPointsLog({
         name: "📝 Raison",
         value: reason,
         inline: false,
-      }
+      },
+      ...(roleSyncWarning
+        ? [{ name: "⚠️ Synchronisation", value: roleSyncWarning, inline: false }]
+        : [])
     )
     .setFooter({
       text: `HMPD • ID du policier : ${member.id}`,
@@ -668,35 +671,20 @@ async function modifyPoints({
 
   verifyMemberCanBeManaged(member);
 
-  const officerBefore = await getOfficer(user.id);
-  const oldPoints = Number(officerBefore.points);
-
-  let newPoints;
-  let actualAmount;
-
-  if (action === "add") {
-    actualAmount = requestedAmount;
-    newPoints = oldPoints + actualAmount;
-  } else {
-    actualAmount = Math.min(
-      requestedAmount,
-      oldPoints
-    );
-
-    newPoints = oldPoints - actualAmount;
-  }
-
-  const oldGrade = getGradeFromPoints(oldPoints);
-  const newGrade = getGradeFromPoints(newPoints);
-
   const databaseResult = await changeOfficerPoints({
     userId: user.id,
     action,
     amount: requestedAmount,
-    grade: newGrade.name,
+    grade: "AUTO",
     reason,
     moderatorId: interaction.user.id,
   });
+
+  // Toujours dériver les grades du résultat réellement validé en base.
+  const oldGrade = getGradeFromPoints(databaseResult.oldPoints);
+  const newGrade = getGradeFromPoints(databaseResult.newPoints);
+
+  let roleSyncWarning = null;
 
   try {
     await synchronizeMemberGrade(
@@ -705,18 +693,15 @@ async function modifyPoints({
       true
     );
   } catch (roleError) {
-    /*
-    | Remise de la base dans son état précédent si le rôle
-    | n'a pas pu être modifié.
-    */
+    // Les points restent enregistrés : on évite d'écraser une éventuelle
+    // modification concurrente. /syncgrade permet de corriger le rôle ensuite.
+    roleSyncWarning =
+      "⚠️ Les points ont été enregistrés, mais le rôle Discord n’a pas pu être synchronisé. Utilise /syncgrade.";
 
-    await updateOfficer(
-      user.id,
-      oldPoints,
-      oldGrade.name
+    console.error(
+      `❌ Synchronisation du rôle impossible pour ${user.id} :`,
+      roleError?.message || roleError
     );
-
-    throw roleError;
   }
 
   await sendPointsLog({

@@ -1,4 +1,5 @@
 const { Pool } = require("pg");
+const { getGradeFromPoints } = require("./dashboard-v2/config/grades");
 
 const RAW_DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
 const DATABASE_URL = RAW_DATABASE_URL.replace(
@@ -183,7 +184,8 @@ async function changeOfficerPoints({ userId, action, amount, grade, reason, mode
   const safeUserId = normalizeUserId(userId);
   const safeAction = String(action || "").trim().toLowerCase();
   const safeAmount = normalizeAmount(amount);
-  const safeGrade = normalizeGrade(grade);
+  // Le grade est recalculé dans la transaction à partir du total réel de points.
+  // Cela évite un grade obsolète si deux modifications arrivent presque en même temps.
   const safeReason = normalizeReason(reason);
   const safeModeratorId = normalizeModeratorId(moderatorId);
   if (!["add", "remove"].includes(safeAction)) throw new Error("Action invalide.");
@@ -196,8 +198,9 @@ async function changeOfficerPoints({ userId, action, amount, grade, reason, mode
     const oldPoints = Number(current.rows[0]?.points || 0);
     const actualAmount = safeAction === "remove" ? Math.min(safeAmount, oldPoints) : safeAmount;
     const newPoints = safeAction === "add" ? oldPoints + actualAmount : oldPoints - actualAmount;
+    const authoritativeGrade = getGradeFromPoints(newPoints)?.name || "Academy";
 
-    await client.query("UPDATE officers SET points=$2, grade=$3, updated_at=CURRENT_TIMESTAMP WHERE user_id=$1", [safeUserId, newPoints, safeGrade]);
+    await client.query("UPDATE officers SET points=$2, grade=$3, updated_at=CURRENT_TIMESTAMP WHERE user_id=$1", [safeUserId, newPoints, authoritativeGrade]);
     if (!(safeAction === "remove" && actualAmount === 0)) {
       await client.query(
         `INSERT INTO points_history (user_id, action, amount, old_points, new_points, reason, moderator_id) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
@@ -205,7 +208,7 @@ async function changeOfficerPoints({ userId, action, amount, grade, reason, mode
       );
     }
     await client.query("COMMIT");
-    return { userId: safeUserId, action: safeAction, amount: actualAmount, oldPoints, newPoints, grade: safeGrade };
+    return { userId: safeUserId, action: safeAction, amount: actualAmount, oldPoints, newPoints, grade: authoritativeGrade };
   } catch (error) {
     await client.query("ROLLBACK").catch(() => {});
     throw error;

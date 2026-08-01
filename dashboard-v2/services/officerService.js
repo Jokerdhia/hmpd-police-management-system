@@ -540,85 +540,45 @@ async function modifyOfficerPoints({
     );
   }
 
-  const officerBefore = await getOfficer(
-    safeUserId
-  );
+  /*
+   * La base calcule le total et le grade de façon atomique.
+   * On synchronise ensuite Discord à partir du résultat réellement enregistré.
+   */
+  const result = await changeOfficerPoints({
+    userId: safeUserId,
+    action: safeAction,
+    amount: safeAmount,
+    grade: "AUTO",
+    reason: safeReason,
+    moderatorId: safeModeratorId,
+  });
 
-  const oldPoints =
-    Number(officerBefore.points) || 0;
-
-  const actualAmount =
-    safeAction === "remove"
-      ? Math.min(safeAmount, oldPoints)
-      : safeAmount;
-
-  if (
-    safeAction === "remove" &&
-    actualAmount === 0
-  ) {
-    throw new Error(
-      "Ce policier possède déjà zéro point."
-    );
-  }
-
-  const newPoints =
-    safeAction === "add"
-      ? oldPoints + actualAmount
-      : oldPoints - actualAmount;
-
-  const oldGrade =
-    getGradeFromPoints(oldPoints);
-
-  const newGrade =
-    getGradeFromPoints(newPoints);
+  const oldGrade = getGradeFromPoints(result.oldPoints);
+  const newGrade = getGradeFromPoints(result.newPoints);
 
   if (!oldGrade?.name || !oldGrade?.roleId) {
-    throw new Error(
-      "L'ancien grade est mal configuré."
-    );
+    throw new Error("L'ancien grade est mal configuré.");
   }
 
   if (!newGrade?.name || !newGrade?.roleId) {
-    throw new Error(
-      "Le nouveau grade est mal configuré."
-    );
+    throw new Error("Le nouveau grade est mal configuré.");
   }
 
-  /*
-   * Modifie d'abord le rôle Discord.
-   * Si SQLite échoue ensuite, l'ancien rôle est restauré.
-   */
-  await setMemberGradeRole(
-    safeUserId,
-    newGrade.roleId
-  );
-
-  let result;
+  let roleSyncWarning = null;
 
   try {
-    result = await changeOfficerPoints({
-      userId: safeUserId,
-      action: safeAction,
-      amount: safeAmount,
-      grade: newGrade.name,
-      reason: safeReason,
-      moderatorId: safeModeratorId,
-    });
-  } catch (error) {
-    /*
-     * Restauration du rôle précédent si la base échoue.
-     */
     await setMemberGradeRole(
       safeUserId,
-      oldGrade.roleId
-    ).catch((rollbackError) => {
-      console.error(
-        `❌ Impossible de restaurer le rôle de ${safeUserId} :`,
-        rollbackError?.message || rollbackError
-      );
-    });
+      newGrade.roleId
+    );
+  } catch (error) {
+    roleSyncWarning =
+      "Les points sont enregistrés, mais le rôle Discord n’a pas pu être synchronisé.";
 
-    throw error;
+    console.error(
+      `❌ Impossible de synchroniser le rôle de ${safeUserId} :`,
+      error?.message || error
+    );
   }
 
   const updatedMember =
@@ -693,6 +653,7 @@ async function modifyOfficerPoints({
     newGrade,
     promoted: isPromotion,
     demoted: isDemotion,
+    roleSyncWarning,
   };
 }
 
