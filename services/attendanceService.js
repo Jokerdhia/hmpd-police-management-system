@@ -422,12 +422,7 @@ async function sendAttendanceLog(
           ? `<@${moderatorId}>`
           : `<@${userId}>`,
         inline: true,
-      },
-      ...(forced ? [] : [{
-        name: "⏳ Statut du rapport",
-        value: "**EN ATTENTE DE VALIDATION**",
-        inline: false,
-      }])
+      }
     )
     .setFooter({
       text: "Harmony Police Department • Duty Report",
@@ -494,10 +489,6 @@ async function sendAttendanceLog(
           );
 
           if (stillWaitingForDecision) {
-            // Le rapport est considéré comme abandonné/inachevé après 5 minutes.
-            // On retire d'abord les boutons pour empêcher toute action concurrente,
-            // puis on le supprime du salon comme demandé.
-            await freshMessage.edit({ components: [] }).catch(() => {});
             await freshMessage.delete().catch(() => {});
           }
         } catch (_) {
@@ -781,39 +772,16 @@ async function handleAttendanceModalButton(interaction) {
     }
 
     if (action === "report-approve") {
-      const freshMessage = await interaction.channel?.messages?.fetch(interaction.message.id).catch(() => null);
-      const original = freshMessage?.embeds?.[0];
-      if (!freshMessage || !original) {
-        await interaction.reply({ content: "❌ Rapport introuvable ou déjà supprimé.", flags: MessageFlags.Ephemeral });
+      const original = interaction.message.embeds?.[0];
+      if (!original) {
+        await interaction.reply({ content: "❌ Rapport introuvable.", flags: MessageFlags.Ephemeral });
         return true;
       }
-
-      const stillPending = freshMessage.components?.some((row) =>
-        row.components?.some((component) => {
-          const customId = component.customId || component.data?.custom_id || "";
-          return customId === `attendance:report-approve:${targetUserId}` ||
-            customId === `attendance:report-reject-open:${targetUserId}`;
-        })
-      );
-      if (!stillPending) {
-        await interaction.reply({ content: "⚠️ Ce rapport a déjà été traité par un autre membre du High Command.", flags: MessageFlags.Ephemeral });
-        return true;
-      }
-
-      const baseFields = (original.fields || []).filter((field) =>
-        !String(field.name || "").includes("Statut du rapport") &&
-        !String(field.name || "").includes("Validé par") &&
-        !String(field.name || "").includes("Refusé par") &&
-        !String(field.name || "").includes("Motif du refus") &&
-        !String(field.name || "").includes("Décision prise")
-      );
       const embed = EmbedBuilder.from(original)
         .setColor(0x2ecc71)
-        .setFields(...baseFields)
         .addFields(
           { name: "✅ Statut du rapport", value: "**VALIDÉ**", inline: true },
-          { name: "🛡️ Validé par", value: `<@${interaction.user.id}>`, inline: true },
-          { name: "🕒 Décision prise", value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
+          { name: "🛡️ Validé par", value: `<@${interaction.user.id}>`, inline: true }
         );
       await interaction.update({ embeds: [embed], components: [] });
       return true;
@@ -891,33 +859,12 @@ async function handleAttendanceModalSubmit(interaction, client) {
       return true;
     }
 
-    const stillPending = reportMessage.components?.some((row) =>
-      row.components?.some((component) => {
-        const customId = component.customId || component.data?.custom_id || "";
-        return customId === `attendance:report-approve:${targetUserId}` ||
-          customId === `attendance:report-reject-open:${targetUserId}`;
-      })
-    );
-    if (!stillPending) {
-      await interaction.editReply("⚠️ Ce rapport a déjà été traité par un autre membre du High Command.");
-      return true;
-    }
-
-    const baseFields = (original.fields || []).filter((field) =>
-      !String(field.name || "").includes("Statut du rapport") &&
-      !String(field.name || "").includes("Validé par") &&
-      !String(field.name || "").includes("Refusé par") &&
-      !String(field.name || "").includes("Motif du refus") &&
-      !String(field.name || "").includes("Décision prise")
-    );
     const embed = EmbedBuilder.from(original)
       .setColor(0xe74c3c)
-      .setFields(...baseFields)
       .addFields(
         { name: "❌ Statut du rapport", value: "**REFUSÉ**", inline: true },
         { name: "🛡️ Refusé par", value: `<@${interaction.user.id}>`, inline: true },
-        { name: "📝 Motif du refus", value: reason.slice(0, 1024), inline: false },
-        { name: "🕒 Décision prise", value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
+        { name: "📝 Motif du refus", value: reason.slice(0, 1024), inline: false }
       );
 
     await reportMessage.edit({ embeds: [embed], components: [] });

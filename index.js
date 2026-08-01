@@ -1336,14 +1336,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 /*
 |--------------------------------------------------------------------------
-| Suppression automatique des réponses privées après 5 minutes
+| Suppression automatique des réponses privées après 30 secondes
 |--------------------------------------------------------------------------
 | Discord conserve les réponses éphémères tant que l'utilisateur ne les
 | ferme pas. On tente donc de supprimer automatiquement toute réponse
-| privée créée par une interaction 5 minutes après son affichage.
+| privée créée par une interaction 30 secondes après son affichage.
 */
 
-const EPHEMERAL_DELETE_DELAY = 5 * 60 * 1000;
+const EPHEMERAL_DELETE_DELAY = 30 * 1000;
 
 client.on(Events.InteractionCreate, (interaction) => {
   const timer = setTimeout(async () => {
