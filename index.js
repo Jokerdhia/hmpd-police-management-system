@@ -1336,6 +1336,32 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 /*
 |--------------------------------------------------------------------------
+| Suppression automatique des réponses privées après 5 minutes
+|--------------------------------------------------------------------------
+| Discord conserve les réponses éphémères tant que l'utilisateur ne les
+| ferme pas. On tente donc de supprimer automatiquement toute réponse
+| privée créée par une interaction 5 minutes après son affichage.
+*/
+
+const EPHEMERAL_DELETE_DELAY = 5 * 60 * 1000;
+
+client.on(Events.InteractionCreate, (interaction) => {
+  const timer = setTimeout(async () => {
+    try {
+      // `interaction.ephemeral` devient true après reply/deferReply éphémère.
+      if (interaction.ephemeral && (interaction.replied || interaction.deferred)) {
+        await interaction.deleteReply().catch(() => {});
+      }
+    } catch (_) {
+      // Le message a peut-être déjà été fermé/supprimé : on ignore.
+    }
+  }, EPHEMERAL_DELETE_DELAY);
+
+  timer.unref?.();
+});
+
+/*
+|--------------------------------------------------------------------------
 | Arrêt propre du bot
 |--------------------------------------------------------------------------
 */

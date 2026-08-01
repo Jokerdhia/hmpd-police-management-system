@@ -422,7 +422,12 @@ async function sendAttendanceLog(
           ? `<@${moderatorId}>`
           : `<@${userId}>`,
         inline: true,
-      }
+      },
+      ...(forced ? [] : [{
+        name: "⏳ Statut du rapport",
+        value: "**EN ATTENTE DE VALIDATION**",
+        inline: false,
+      }])
     )
     .setFooter({
       text: "Harmony Police Department • Duty Report",
@@ -438,12 +443,70 @@ async function sendAttendanceLog(
   }
 
   try {
-    await channel.send({
+    const components = forced
+      ? []
+      : [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId(`attendance:report-approve:${userId}`)
+              .setLabel("Valider le rapport")
+              .setEmoji("✅")
+              .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+              .setCustomId(`attendance:report-reject-open:${userId}`)
+              .setLabel("Refuser le rapport")
+              .setEmoji("❌")
+              .setStyle(ButtonStyle.Danger)
+          ),
+        ];
+
+    const reportMessage = await channel.send({
       embeds: [embed],
+      components,
       allowedMentions: {
         parse: [],
       },
     });
+
+    // Nettoyage automatique des rapports laissés inachevés.
+    // Un rapport normal reste considéré comme « en attente » tant que les
+    // boutons Valider / Refuser sont encore présents. S'il n'est pas traité
+    // dans les 5 minutes, on le supprime automatiquement afin d'éviter les
+    // brouillons/rapports abandonnés dans le salon. Les rapports déjà validés
+    // ou refusés ne sont jamais supprimés par ce timer (leurs boutons ont été
+    // retirés au moment de la décision).
+    if (!forced && reportMessage) {
+      const unfinishedReportDeleteDelay = 5 * 60 * 1000;
+      const cleanupTimer = setTimeout(async () => {
+        try {
+          const freshMessage = await channel.messages
+            .fetch(reportMessage.id)
+            .catch(() => null);
+
+          if (!freshMessage) return;
+
+          const stillWaitingForDecision = freshMessage.components?.some((row) =>
+            row.components?.some((component) => {
+              const customId = component.customId || component.data?.custom_id || "";
+              return customId.startsWith("attendance:report-approve:") ||
+                customId.startsWith("attendance:report-reject-open:");
+            })
+          );
+
+          if (stillWaitingForDecision) {
+            // Le rapport est considéré comme abandonné/inachevé après 5 minutes.
+            // On retire d'abord les boutons pour empêcher toute action concurrente,
+            // puis on le supprime du salon comme demandé.
+            await freshMessage.edit({ components: [] }).catch(() => {});
+            await freshMessage.delete().catch(() => {});
+          }
+        } catch (_) {
+          // Le message peut déjà avoir été supprimé ou ne plus être accessible.
+        }
+      }, unfinishedReportDeleteDelay);
+
+      cleanupTimer.unref?.();
+    }
   } catch (error) {
     console.error(
       "❌ Envoi du rapport de service impossible :",
@@ -706,6 +769,72 @@ async function sendForcedRemark(client, { userId, moderatorId, remark, kind, pen
 async function handleAttendanceModalButton(interaction) {
   if (!interaction.isButton() || !interaction.customId?.startsWith("attendance:")) return false;
   const [, action, targetUserId] = interaction.customId.split(":");
+
+  if (action === "report-approve" || action === "report-reject-open") {
+    if (!interaction.guild || !memberIsHighCommand(interaction.member, interaction)) {
+      await interaction.reply({ content: "❌ Cette action est réservée au High Command.", flags: MessageFlags.Ephemeral });
+      return true;
+    }
+    if (!/^\d{16,22}$/.test(String(targetUserId || ""))) {
+      await interaction.reply({ content: "❌ Identifiant du policier invalide.", flags: MessageFlags.Ephemeral });
+      return true;
+    }
+
+    if (action === "report-approve") {
+      const freshMessage = await interaction.channel?.messages?.fetch(interaction.message.id).catch(() => null);
+      const original = freshMessage?.embeds?.[0];
+      if (!freshMessage || !original) {
+        await interaction.reply({ content: "❌ Rapport introuvable ou déjà supprimé.", flags: MessageFlags.Ephemeral });
+        return true;
+      }
+
+      const stillPending = freshMessage.components?.some((row) =>
+        row.components?.some((component) => {
+          const customId = component.customId || component.data?.custom_id || "";
+          return customId === `attendance:report-approve:${targetUserId}` ||
+            customId === `attendance:report-reject-open:${targetUserId}`;
+        })
+      );
+      if (!stillPending) {
+        await interaction.reply({ content: "⚠️ Ce rapport a déjà été traité par un autre membre du High Command.", flags: MessageFlags.Ephemeral });
+        return true;
+      }
+
+      const baseFields = (original.fields || []).filter((field) =>
+        !String(field.name || "").includes("Statut du rapport") &&
+        !String(field.name || "").includes("Validé par") &&
+        !String(field.name || "").includes("Refusé par") &&
+        !String(field.name || "").includes("Motif du refus") &&
+        !String(field.name || "").includes("Décision prise")
+      );
+      const embed = EmbedBuilder.from(original)
+        .setColor(0x2ecc71)
+        .setFields(...baseFields)
+        .addFields(
+          { name: "✅ Statut du rapport", value: "**VALIDÉ**", inline: true },
+          { name: "🛡️ Validé par", value: `<@${interaction.user.id}>`, inline: true },
+          { name: "🕒 Décision prise", value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
+        );
+      await interaction.update({ embeds: [embed], components: [] });
+      return true;
+    }
+
+    const modal = new ModalBuilder()
+      .setCustomId(`attendance:report-reject-submit:${targetUserId}:${interaction.message.id}`)
+      .setTitle("Refuser le rapport");
+    const reasonInput = new TextInputBuilder()
+      .setCustomId("reject_reason")
+      .setLabel("Motif du refus")
+      .setStyle(TextInputStyle.Paragraph)
+      .setMinLength(2)
+      .setMaxLength(500)
+      .setRequired(true)
+      .setPlaceholder("Écris ici le motif exact du refus...");
+    modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
+    await interaction.showModal(modal);
+    return true;
+  }
+
   if (!["force-end-open", "force-pause-open", "force-end-modal", "force-pause-modal"].includes(action)) return false;
 
   if (!interaction.guild || !memberIsHighCommand(interaction.member, interaction)) {
@@ -736,7 +865,66 @@ async function handleAttendanceModalButton(interaction) {
 
 async function handleAttendanceModalSubmit(interaction, client) {
   if (!interaction.isModalSubmit() || !interaction.customId?.startsWith("attendance:")) return false;
-  const [, action, targetUserId] = interaction.customId.split(":");
+  const parts = interaction.customId.split(":");
+  const [, action, targetUserId, reportMessageId] = parts;
+
+  if (action === "report-reject-submit") {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    if (!interaction.guild || !memberIsHighCommand(interaction.member, interaction)) {
+      await interaction.editReply("❌ Cette action est réservée au High Command.");
+      return true;
+    }
+
+    const reason = String(interaction.fields.getTextInputValue("reject_reason") || "").trim();
+    if (!reason || reason.length > 500) {
+      await interaction.editReply("❌ Le motif du refus est obligatoire et limité à 500 caractères.");
+      return true;
+    }
+
+    const channel = interaction.channel;
+    const reportMessage = channel?.messages?.fetch
+      ? await channel.messages.fetch(reportMessageId).catch(() => null)
+      : null;
+    const original = reportMessage?.embeds?.[0];
+    if (!reportMessage || !original) {
+      await interaction.editReply("❌ Impossible de retrouver le rapport à refuser.");
+      return true;
+    }
+
+    const stillPending = reportMessage.components?.some((row) =>
+      row.components?.some((component) => {
+        const customId = component.customId || component.data?.custom_id || "";
+        return customId === `attendance:report-approve:${targetUserId}` ||
+          customId === `attendance:report-reject-open:${targetUserId}`;
+      })
+    );
+    if (!stillPending) {
+      await interaction.editReply("⚠️ Ce rapport a déjà été traité par un autre membre du High Command.");
+      return true;
+    }
+
+    const baseFields = (original.fields || []).filter((field) =>
+      !String(field.name || "").includes("Statut du rapport") &&
+      !String(field.name || "").includes("Validé par") &&
+      !String(field.name || "").includes("Refusé par") &&
+      !String(field.name || "").includes("Motif du refus") &&
+      !String(field.name || "").includes("Décision prise")
+    );
+    const embed = EmbedBuilder.from(original)
+      .setColor(0xe74c3c)
+      .setFields(...baseFields)
+      .addFields(
+        { name: "❌ Statut du rapport", value: "**REFUSÉ**", inline: true },
+        { name: "🛡️ Refusé par", value: `<@${interaction.user.id}>`, inline: true },
+        { name: "📝 Motif du refus", value: reason.slice(0, 1024), inline: false },
+        { name: "🕒 Décision prise", value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
+      );
+
+    await reportMessage.edit({ embeds: [embed], components: [] });
+    await interaction.editReply(`✅ Rapport de <@${targetUserId}> refusé. Motif enregistré : **${reason}**`);
+    return true;
+  }
+
   if (action !== "force-end-submit" && action !== "force-pause-submit") return false;
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
