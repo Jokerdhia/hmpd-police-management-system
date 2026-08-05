@@ -694,6 +694,7 @@ async function modifyOfficerPoints({
 }
 
 module.exports = {
+  enrichOfficers,
   listOfficers,
   getOfficerProfile,
   getEnrichedLeaderboard,

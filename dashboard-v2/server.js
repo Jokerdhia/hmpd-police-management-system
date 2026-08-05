@@ -15,9 +15,11 @@ const dashboardRoutes = require("./routes/dashboard");
 const extrasRoutes = require("./routes/extras");
 const attendanceRoutes = require("./routes/attendance");
 const realtimeRoutes = require("./routes/realtime");
+const managementRoutes = require("./routes/management");
 const { actionDedupe } = require("./middlewares/idempotency");
 const { clientCount, closeAll: closeRealtimeClients } = require("./services/realtimeService");
 const { pool, ready: databaseReady, closeDatabase } = require("../database");
+const { startWeeklyReport, stopWeeklyReport } = require("./services/weeklyReportService");
 
 const {
   oauthEnabled,
@@ -267,7 +269,7 @@ app.get(
     return response.status(healthy ? 200 : 503).json({
       success: healthy,
       status: healthy ? "online" : "degraded",
-      version: "2.0.0",
+      version: "3.0.0",
       dashboard: "HMPD Dashboard Pro",
       oauthEnabled,
       database,
@@ -399,6 +401,8 @@ app.use(
   realtimeRoutes
 );
 
+app.use("/api/management", managementRoutes);
+
 /* =========================================================
    ROUTES INTROUVABLES
 ========================================================= */
@@ -481,6 +485,7 @@ function startServer() {
 
       try {
         startRoleSync();
+        startWeeklyReport();
 
         console.log(
           "✅ Synchronisation des rôles démarrée."
@@ -541,6 +546,7 @@ function shutdown(signal) {
       "function"
     ) {
       stopRoleSync();
+  stopWeeklyReport();
 
       console.log(
         "✅ Synchronisation des rôles arrêtée."

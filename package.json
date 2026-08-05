@@ -1,12 +1,12 @@
 {
   "name": "hmpd-police-management-system",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "main": "start-render.js",
   "scripts": {
     "start": "node start-render.js",
     "bot": "node index.js",
     "dashboard": "node dashboard-v2/server.js",
-    "check": "node --check index.js && node --check start-render.js && node --check database.js && node --check dashboard-v2/server.js && node --check dashboard-v2/dashboardDatabase.js && node --check dashboard-v2/services/officerService.js && node --check dashboard-v2/services/discordService.js && node --check dashboard-v2/services/realtimeService.js && node --check dashboard-v2/middlewares/idempotency.js"
+    "check": "node --check index.js && node --check start-render.js && node --check database.js && node --check dashboard-v2/server.js && node --check dashboard-v2/dashboardDatabase.js && node --check dashboard-v2/services/officerService.js && node --check dashboard-v2/services/discordService.js && node --check dashboard-v2/services/realtimeService.js && node --check dashboard-v2/middlewares/idempotency.js && node --check dashboard-v2/services/managementService.js && node --check dashboard-v2/routes/management.js && node --check dashboard-v2/services/weeklyReportService.js"
   },
   "engines": {
     "node": ">=20.0.0 <25.0.0"

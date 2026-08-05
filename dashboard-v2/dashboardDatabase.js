@@ -19,6 +19,12 @@ const ready = coreReady.then(() => pool.query(`
   CREATE INDEX IF NOT EXISTS idx_notes_unread ON officer_notes(user_id, read_at);
   CREATE INDEX IF NOT EXISTS idx_sanctions_user ON officer_sanctions(user_id);
   CREATE INDEX IF NOT EXISTS idx_sanctions_user_status ON officer_sanctions(user_id, status, created_at DESC);
+  CREATE TABLE IF NOT EXISTS admin_audit_log (
+    id BIGSERIAL PRIMARY KEY, actor_id TEXT NOT NULL, action TEXT NOT NULL, target_id TEXT,
+    details JSONB NOT NULL DEFAULT '{}'::jsonb, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  CREATE INDEX IF NOT EXISTS idx_audit_created ON admin_audit_log(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_audit_target ON admin_audit_log(target_id, created_at DESC);
 `)).then(() => console.log("✅ Tables Dashboard PostgreSQL prêtes."));
 
 function lim(v,f=50,m=200){const n=parseInt(v,10);return Number.isInteger(n)&&n>0?Math.min(n,m):f}

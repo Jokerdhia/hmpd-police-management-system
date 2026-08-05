@@ -13,6 +13,7 @@ const {
 } = require("../auth/auth");
 
 const { broadcast } = require("../services/realtimeService");
+const { audit } = require("../services/managementService");
 
 const router = express.Router();
 
@@ -111,6 +112,7 @@ router.post(
       });
 
       broadcast("points-changed", { userId, action, amount });
+      await audit({actorId:getModeratorId(request),action:`points.${action}`,targetId:userId,details:{amount,reason,newPoints:result?.result?.newPoints}}).catch(()=>{});
 
       return response.status(200).json({
         success: true,

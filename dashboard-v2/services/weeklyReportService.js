@@ -1,0 +1,11 @@
+const { getBotSetting, setBotSetting } = require('../../database');
+const { getWeeklyReport } = require('./managementService');
+const { sendChannelMessage } = require('./discordService');
+const CHANNEL=String(process.env.WEEKLY_REPORT_CHANNEL_ID||'').trim();
+let timer=null;
+function keyFor(d=new Date()){const x=new Date(d);x.setUTCDate(x.getUTCDate()-((x.getUTCDay()+6)%7));return x.toISOString().slice(0,10)}
+function format(r){const h=s=>`${Math.floor(Number(s||0)/3600)}h${String(Math.floor(Number(s||0)%3600/60)).padStart(2,'0')}`;return [`📊 **Rapport hebdomadaire HMPD**`,`Effectif: **${r.summary.officers}** · Score moyen: **${r.summary.averageScore}/100**`,`Promotions suggérées: **${r.summary.promotionEligible}** · Inactifs 7j+: **${r.summary.inactive7}**`,``,`**Top présence**`,...(r.topAttendance.length?r.topAttendance.map((o,i)=>`${i+1}. ${o.display_name||o.user_id} — ${h(o.week_seconds)} — ${o.score}/100`):['Aucune donnée']),``,`**Promotions suggérées**`,...(r.promotions.length?r.promotions.slice(0,10).map(o=>`• ${o.display_name||o.user_id} → ${o.next_grade}`):['Aucune']),``,`**Inactifs**`,...(r.inactive.length?r.inactive.slice(0,10).map(o=>`• ${o.display_name||o.user_id} — ${o.inactive_days}j`):['Aucun'])].join('\n').slice(0,1900)}
+async function tick(){if(!CHANNEL)return;const now=new Date();const brusselsHour=Number(new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Brussels',hour:'2-digit',hour12:false}).format(now));const weekday=new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Brussels',weekday:'short'}).format(now);if(weekday!=='Mon'||brusselsHour<8||brusselsHour>10)return;const key=keyFor(now);if(await getBotSetting('weekly_report_last_key')===key)return;const r=await getWeeklyReport();await sendChannelMessage(CHANNEL,format(r));await setBotSetting('weekly_report_last_key',key);console.log('✅ Rapport HMPD hebdomadaire envoyé.');}
+function startWeeklyReport(){if(!CHANNEL){console.log('ℹ️ Rapport hebdomadaire Discord désactivé (WEEKLY_REPORT_CHANNEL_ID absent).');return}tick().catch(e=>console.error('❌ Rapport hebdomadaire:',e?.message||e));timer=setInterval(()=>tick().catch(e=>console.error('❌ Rapport hebdomadaire:',e?.message||e)),60*60*1000);timer.unref?.()}
+function stopWeeklyReport(){if(timer)clearInterval(timer);timer=null}
+module.exports={startWeeklyReport,stopWeeklyReport};

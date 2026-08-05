@@ -15,6 +15,7 @@ const {
 } = require("../auth/auth");
 
 const { broadcast } = require("../services/realtimeService");
+const { audit } = require("../services/managementService");
 
 const router = express.Router();
 
@@ -178,6 +179,7 @@ router.post(
       });
 
       broadcast("note-changed", { userId });
+      await audit({actorId:moderatorId,action:"note.add",targetId:userId,details:{content}}).catch(()=>{});
 
       return response.status(201).json({
         success: true,
@@ -249,6 +251,7 @@ router.post(
       });
 
       broadcast("sanction-changed", { userId });
+      await audit({actorId:getModeratorId(request),action:"sanction.add",targetId:userId,details:{type,reason,expiresAt}}).catch(()=>{});
 
       return response.status(201).json({
         success: true,

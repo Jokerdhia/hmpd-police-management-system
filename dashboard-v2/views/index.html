@@ -25,6 +25,7 @@
         <button class="nav-item" data-page="leaderboard"><span>★</span>Classement</button>
         <button class="nav-item" data-page="messages"><span>✉</span><span class="nav-label">Mes messages</span><span class="message-badge hidden" id="messageUnreadBadge">0</span></button>
         <button class="nav-item" data-page="activity"><span>≡</span>Activité</button>
+        <button class="nav-item hidden" id="managementNav" data-management-page><span>◆</span>Commandement</button>
       </nav>
 
       <div class="sidebar-user" id="currentUser">
@@ -187,6 +188,29 @@
           <div id="activityFeed" class="activity-feed"></div>
         </article>
       </section>
+
+      <section id="managementPage" class="page">
+        <div class="management-hero">
+          <div><p class="eyebrow">HIGH COMMAND</p><h2>Centre de commandement</h2><p>Effectifs, performance, alertes, promotions et audit administratif.</p></div>
+          <button class="btn btn-secondary" id="managementRefresh">Actualiser</button>
+        </div>
+        <div class="stats-grid management-stats">
+          <article class="stat-card"><div class="stat-icon">🟢</div><div><span>En service</span><strong id="mgOnDuty">0</strong></div></article>
+          <article class="stat-card"><div class="stat-icon">📈</div><div><span>Score moyen</span><strong id="mgAverageScore">0</strong></div></article>
+          <article class="stat-card"><div class="stat-icon">🎖️</div><div><span>Promotions suggérées</span><strong id="mgPromotions">0</strong></div></article>
+          <article class="stat-card"><div class="stat-icon">⚠️</div><div><span>Inactifs 7j+</span><strong id="mgInactive">0</strong></div></article>
+        </div>
+        <div class="dashboard-grid">
+          <article class="panel"><div class="panel-head"><div><h2>Alertes intelligentes</h2><p>Éléments nécessitant une vérification</p></div></div><div id="managementAlerts" class="management-list"></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Promotions</h2><p>Suggestions basées sur points, présence et discipline</p></div></div><div id="managementPromotions" class="management-list"></div></article>
+        </div>
+        <article class="panel panel-spaced"><div class="panel-head panel-head-responsive"><div><h2>Performance des policiers</h2><p>Score transparent sur 100 — aide à la décision uniquement</p></div><input id="managementSearch" class="search" type="search" placeholder="Rechercher un policier..."></div><div class="table-scroll"><table><thead><tr><th>Policier</th><th>Grade</th><th>Score</th><th>Service semaine</th><th>Discipline</th><th>Dernier service</th><th></th></tr></thead><tbody id="managementOfficerRows"></tbody></table></div></article>
+        <article class="panel panel-spaced"><div class="panel-head"><div><h2>Couverture horaire — 30 jours</h2><p>Nombre de policiers distincts ayant commencé un service par heure</p></div></div><div id="coverageGrid" class="coverage-grid"></div></article>
+        <div class="dashboard-grid panel-spaced">
+          <article class="panel"><div class="panel-head"><div><h2>Rapport hebdomadaire</h2><p>Synthèse prête à partager</p></div><button class="btn btn-secondary" id="copyWeeklyReport">Copier</button></div><pre id="weeklyReport" class="report-box">Chargement…</pre></article>
+          <article class="panel"><div class="panel-head"><div><h2>Audit High Command</h2><p>Qui a modifié quoi et quand</p></div></div><div id="managementAudit" class="management-list"></div></article>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -250,5 +274,6 @@
 
   <script src="/js/dashboard.js"></script>
   <script src="/js/attendance.js"></script>
+  <script src="/js/management.js"></script>
 </body>
 </html>
