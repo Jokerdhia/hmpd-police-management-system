@@ -1,0 +1,6 @@
+HMPD Command Center V3.0.1
+
+Corrections:
+- Export de invalidateOfficerCache pour roleSyncService.
+- Correction SQL PostgreSQL de la couverture horaire: alias hour -> hour_of_day.
+- Version package: 3.0.1.

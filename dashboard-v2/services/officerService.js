@@ -700,4 +700,5 @@ module.exports = {
   getEnrichedLeaderboard,
   getHistory,
   modifyOfficerPoints,
+  invalidateOfficerCache,
 };

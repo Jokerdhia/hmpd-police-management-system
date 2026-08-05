@@ -50,8 +50,8 @@ async function getManagementSnapshot(){
     if(o.promotion_eligible) alerts.push({severity:'info',type:'promotion',user_id:o.user_id,message:`Éligible à ${o.next_grade}`});
   }
   const active=await pool.query(`SELECT COUNT(*)::int total,COUNT(*) FILTER(WHERE paused_at IS NOT NULL)::int paused FROM attendance_sessions WHERE ended_at IS NULL`);
-  const coverageRows=(await pool.query(`SELECT EXTRACT(HOUR FROM started_at AT TIME ZONE 'Europe/Brussels')::int hour,COUNT(DISTINCT user_id)::int officers FROM attendance_sessions WHERE started_at>=CURRENT_TIMESTAMP-interval '30 days' GROUP BY 1 ORDER BY 1`)).rows;
-  const coverage=Array.from({length:24},(_,hour)=>({hour,officers:Number(coverageRows.find(x=>Number(x.hour)===hour)?.officers||0)}));
+  const coverageRows=(await pool.query(`SELECT EXTRACT(HOUR FROM started_at AT TIME ZONE 'Europe/Brussels')::int AS hour_of_day, COUNT(DISTINCT user_id)::int AS officers FROM attendance_sessions WHERE started_at >= CURRENT_TIMESTAMP - interval '30 days' GROUP BY 1 ORDER BY 1`)).rows;
+  const coverage=Array.from({length:24},(_,hour)=>({hour,officers:Number(coverageRows.find(x=>Number(x.hour_of_day)===hour)?.officers||0)}));
   return {officers,alerts:alerts.slice(0,100),coverage,summary:{officers:officers.length,onDuty:Number(active.rows[0]?.total||0),paused:Number(active.rows[0]?.paused||0),inactive7:officers.filter(o=>o.inactive_days>=7).length,promotionEligible:officers.filter(o=>o.promotion_eligible).length,averageScore:officers.length?Math.round(officers.reduce((a,o)=>a+o.score.total,0)/officers.length):0}};
 }
 async function getOfficerTimeline(userId,limit=80){
