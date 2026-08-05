@@ -35,9 +35,23 @@ async function getManagementSnapshot(){
     ORDER BY o.points DESC`);
   const base=rows.map(r=>({...r,week_seconds:Number(r.week_seconds||0),score:scoreOfficer(r)}));
   let enriched=base;
-  try{ enriched=await enrichOfficers(base); }catch{}
+  try{
+    enriched=await enrichOfficers(base);
+  }catch(error){
+    console.error('❌ Vérification des rôles Discord impossible pour le Command Center :', error?.message || error);
+    enriched=[]; // fail closed: ne jamais afficher d'anciens policiers si Discord ne peut pas confirmer leur rôle actuel
+  }
+
+  // V3.0.2 : le Command Center ne doit considérer que les membres
+  // actuellement présents sur Discord ET possédant encore le rôle Police.
+  // Les anciennes lignes restent en base pour l'historique, mais elles ne
+  // polluent plus les scores, alertes, promotions ou rapports actuels.
+  const activePoliceOfficers=enriched.filter(o=>
+    o && o.is_in_server === true && o.has_police_role === true
+  );
+
   const now=Date.now();
-  const officers=enriched.map(o=>{
+  const officers=activePoliceOfficers.map(o=>{
     const inactiveDays=o.last_service?Math.floor((now-new Date(o.last_service).getTime())/86400000):999;
     const eligible=Number(o.points)>=Number(o.next_grade_points||Infinity)-0 && Number(o.active_sanctions)===0 && Number(o.week_seconds)>=8*3600;
     return {...o,inactive_days:inactiveDays,promotion_eligible:Boolean(o.next_grade&&eligible)};

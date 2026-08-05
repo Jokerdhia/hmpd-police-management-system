@@ -1,6 +1,6 @@
 {
   "name": "hmpd-police-management-system",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "main": "start-render.js",
   "scripts": {
     "start": "node start-render.js",
