@@ -12,6 +12,8 @@ const {
   getModeratorId,
 } = require("../auth/auth");
 
+const { broadcast } = require("../services/realtimeService");
+
 const router = express.Router();
 
 function normalizeDiscordId(value) {
@@ -107,6 +109,8 @@ router.post(
         reason,
         moderatorId: getModeratorId(request),
       });
+
+      broadcast("points-changed", { userId, action, amount });
 
       return response.status(200).json({
         success: true,

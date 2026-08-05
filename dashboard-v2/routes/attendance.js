@@ -4,6 +4,7 @@ const {listOfficers}=require("../services/officerService");
 const {requireHighCommand,getModeratorId}=require("../auth/auth");
 const {startAttendance,stopAttendance,pauseAttendance,resumeAttendance,removeAttendanceTime}=require("../../database");
 const {sendChannelMessage}=require("../services/discordService");
+const {broadcast}=require("../services/realtimeService");
 const router=express.Router();
 function getLogChannelId(){return String(process.env.ATTENDANCE_LOG_CHANNEL_ID||"").trim()}
 function getRemarkChannelId(){return String(process.env.ATTENDANCE_REMARK_CHANNEL_ID||process.env.REMARK_CHANNEL_ID||"").trim()}
@@ -59,6 +60,7 @@ router.post("/me/:action",async(req,res,next)=>{try{
   if(!ok){const messages={already_active:"Tu es déjà en service.",already_paused:"Tu es déjà en pause.",not_paused:"Tu n’es pas en pause.",not_active:"Tu n’as aucun service actif."};return res.status(409).json({success:false,message:messages[result.reason]||"Action impossible."});}
   await sendSelfLog(action,userId,result);
   const messages={start:"Tu es maintenant en service.",pause:"Ta pause a été enregistrée.",resume:"Tu as repris ton service.",stop:"Ta fin de service a été enregistrée."};
+  broadcast("attendance-changed",{userId,action});
   res.json({success:true,message:messages[action],session:result.session});
 }catch(e){next(e)}});
 
@@ -86,6 +88,8 @@ router.post("/:userId/force-stop",requireHighCommand,async(req,res,next)=>{try{
   let remarkError=null;
   if(remarkChannelId){try{await sendChannelMessage(remarkChannelId,{content:`<@${userId}>`,embeds:[{color:15158332,title:"⚠️ تنبيه إداري",description:`تم إنهاء خدمة <@${userId}> إجبارياً بسبب عدم تسجيل نهاية الخدمة.`,fields:[{name:"⏳ خصم الساعات",value:penaltyRemovedSeconds>0?`تم خصم **${formatDurationAr(penaltyRemovedSeconds)}** من مجموع ساعاتك.`:"لم تتوفر ساعات كافية للخصم.",inline:false},{name:"📝 ملاحظة القيادة",value:remark,inline:false},{name:"🛡 بواسطة",value:`<@${moderatorId}>`,inline:true}],footer:{text:"Harmony Police • يرجى إنهاء الخدمة بشكل صحيح"}}],allowed_mentions:{parse:[],users:[String(userId)].filter(id=>/^\d{17,20}$/.test(id))}});remarkSent=true}catch(err){remarkError=err?.message||String(err);console.error("Envoi remarque fin forcée:",remarkError)}}
   const penaltyText=penaltyRemovedSeconds>0?`${Math.floor(penaltyRemovedSeconds/3600)} h ${Math.floor((penaltyRemovedSeconds%3600)/60)} min retirées`:"aucune heure disponible à retirer";
+  broadcast("attendance-changed",{userId,action:"force-stop"});
+  broadcast("attendance-changed",{userId,action:"force-pause"});
   res.json({success:true,message:remarkSent?`Fin de service forcée, ${penaltyText}, et remarque envoyée.`:`La fin de service a été enregistrée (${penaltyText}), mais la remarque Discord n’a pas pu être envoyée.`,remarkSent,remarkError,penaltyRequestedSeconds,penaltyRemovedSeconds,penaltyError,session:result.session});
 }catch(e){next(e)}});
 
@@ -133,6 +137,7 @@ router.post("/:userId/remove-time",requireHighCommand,async(req,res,next)=>{try{
   const result=await removeAttendanceTime({userId,seconds:(hours*3600)+(minutes*60),reason,moderatorId});
   const logChannelId=getLogChannelId();
   if(logChannelId){await sendChannelMessage(logChannelId,{embeds:[{color:15158332,title:"⏱ CORRECTION DES HEURES",description:`👮 <@${userId}>`,fields:[{name:"Temps retiré",value:`${Math.floor(result.removedSeconds/3600)} h ${Math.floor((result.removedSeconds%3600)/60)} min`,inline:true},{name:"Motif",value:reason,inline:false},{name:"Action effectuée par",value:`<@${moderatorId}>`,inline:true}],footer:{text:"Harmony Police Department • Dashboard"},timestamp:new Date().toISOString()}],allowed_mentions:{parse:[]}}).catch(err=>console.error("Log correction heures:",err.message))}
+  broadcast("attendance-changed",{userId,action:"adjust"});
   res.json({success:true,message:"Les heures ont été corrigées.",...result});
 }catch(e){next(e)}});
 module.exports=router;

@@ -14,6 +14,10 @@ const statisticsRoutes = require("./routes/statistics");
 const dashboardRoutes = require("./routes/dashboard");
 const extrasRoutes = require("./routes/extras");
 const attendanceRoutes = require("./routes/attendance");
+const realtimeRoutes = require("./routes/realtime");
+const { actionDedupe } = require("./middlewares/idempotency");
+const { clientCount, closeAll: closeRealtimeClients } = require("./services/realtimeService");
+const { pool, ready: databaseReady, closeDatabase } = require("../database");
 
 const {
   oauthEnabled,
@@ -244,21 +248,35 @@ registerAuthRoutes(app);
  */
 app.get(
   "/api/health",
-  (request, response) => {
-    return response.status(200).json({
-      success: true,
-      status: "online",
+  async (request, response) => {
+    const startedAt = Date.now();
+    let database = "online";
+    let databaseLatencyMs = null;
+
+    try {
+      await databaseReady;
+      const dbStarted = Date.now();
+      await pool.query("SELECT 1");
+      databaseLatencyMs = Date.now() - dbStarted;
+    } catch (error) {
+      database = "offline";
+      console.error("❌ Health-check PostgreSQL :", error?.message || error);
+    }
+
+    const healthy = database === "online";
+    return response.status(healthy ? 200 : 503).json({
+      success: healthy,
+      status: healthy ? "online" : "degraded",
+      version: "2.0.0",
       dashboard: "HMPD Dashboard Pro",
       oauthEnabled,
-      environment:
-        isProduction
-          ? "production"
-          : "development",
-      uptime: Math.floor(
-        process.uptime()
-      ),
-      timestamp:
-        new Date().toISOString(),
+      database,
+      databaseLatencyMs,
+      realtimeClients: clientCount(),
+      environment: isProduction ? "production" : "development",
+      uptime: Math.floor(process.uptime()),
+      responseMs: Date.now() - startedAt,
+      timestamp: new Date().toISOString(),
     });
   }
 );
@@ -295,6 +313,9 @@ app.get(
  * requireAuth vérifie directement les rôles Discord.
  */
 app.use(requireAuth);
+
+/* Bloque les doubles soumissions accidentelles sur les actions POST. */
+app.use("/api", actionDedupe);
 
 /* =========================================================
    FICHIERS STATIQUES PROTÉGÉS
@@ -371,6 +392,11 @@ app.use(
 app.use(
   "/api/attendance",
   attendanceRoutes
+);
+
+app.use(
+  "/api/realtime",
+  realtimeRoutes
 );
 
 /* =========================================================
@@ -527,12 +553,18 @@ function shutdown(signal) {
     );
   }
 
+  try {
+    closeRealtimeClients();
+  } catch (error) {
+    console.error("❌ Fermeture SSE :", error?.message || error);
+  }
+
   if (!server) {
-    process.exit(0);
+    closeDatabase().catch(() => {}).finally(() => process.exit(0));
     return;
   }
 
-  server.close((error) => {
+  server.close(async (error) => {
     if (error) {
       console.error(
         "❌ Erreur pendant l'arrêt du serveur :",
@@ -541,6 +573,12 @@ function shutdown(signal) {
 
       process.exit(1);
       return;
+    }
+
+    try {
+      await closeDatabase();
+    } catch (databaseError) {
+      console.error("❌ Fermeture PostgreSQL :", databaseError?.message || databaseError);
     }
 
     console.log(

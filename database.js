@@ -16,6 +16,8 @@ const pool = new Pool({
   max: Number.parseInt(process.env.DATABASE_POOL_MAX, 10) || 10,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
+  statement_timeout: Number.parseInt(process.env.DATABASE_STATEMENT_TIMEOUT_MS, 10) || 15000,
+  application_name: "hmpd-v2",
 });
 
 pool.on("error", (error) => {
@@ -47,6 +49,8 @@ const ready = (async () => {
     CREATE INDEX IF NOT EXISTS idx_points_history_user_id ON points_history(user_id);
     CREATE INDEX IF NOT EXISTS idx_points_history_created_at ON points_history(created_at);
     CREATE INDEX IF NOT EXISTS idx_officers_points ON officers(points);
+    CREATE INDEX IF NOT EXISTS idx_officers_updated_at ON officers(updated_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_points_history_user_created ON points_history(user_id, created_at DESC);
 
     CREATE TABLE IF NOT EXISTS attendance_sessions (
       id BIGSERIAL PRIMARY KEY,
@@ -69,6 +73,8 @@ const ready = (async () => {
       ON attendance_sessions(user_id, started_at DESC);
     CREATE INDEX IF NOT EXISTS idx_attendance_active
       ON attendance_sessions(started_at) WHERE ended_at IS NULL;
+    CREATE INDEX IF NOT EXISTS idx_attendance_started_desc ON attendance_sessions(started_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_attendance_ended_desc ON attendance_sessions(ended_at DESC) WHERE ended_at IS NOT NULL;
 
     CREATE TABLE IF NOT EXISTS attendance_adjustments (
       id BIGSERIAL PRIMARY KEY,
@@ -643,6 +649,7 @@ async function closeDatabase() {
 }
 
 module.exports = {
+  pool,
   ready, getOfficer, updateOfficer, changeOfficerPoints, addPointsHistory,
   getOfficerHistory, getLeaderboard, getAllOfficers, countOfficers,
   startAttendance,

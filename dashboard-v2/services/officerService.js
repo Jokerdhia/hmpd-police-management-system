@@ -326,14 +326,10 @@ async function getOfficerProfile(userId) {
 
 async function getEnrichedLeaderboard(limit = 25) {
   const safeLimit = normalizeLimit(limit);
-  const enriched = await enrichOfficers(await getAllOfficers());
+  // V2: réutilise le cache enrichi commun au lieu de refaire un cycle Discord complet.
+  const officers = await listOfficers();
 
-  return enriched
-    .filter(
-      (officer) =>
-        officer.is_in_server &&
-        officer.has_police_role
-    )
+  return [...officers]
     .sort((a, b) => Number(b.points) - Number(a.points))
     .slice(0, safeLimit);
 }

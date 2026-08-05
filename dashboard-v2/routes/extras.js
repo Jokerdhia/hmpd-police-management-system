@@ -14,6 +14,8 @@ const {
   getModeratorId,
 } = require("../auth/auth");
 
+const { broadcast } = require("../services/realtimeService");
+
 const router = express.Router();
 
 function normalizeDiscordId(value, label = "Identifiant Discord") {
@@ -175,6 +177,8 @@ router.post(
         authorId: moderatorId,
       });
 
+      broadcast("note-changed", { userId });
+
       return response.status(201).json({
         success: true,
         message: "Note ajoutée dans le MDT du policier.",
@@ -243,6 +247,8 @@ router.post(
         expiresAt,
         authorId: getModeratorId(request),
       });
+
+      broadcast("sanction-changed", { userId });
 
       return response.status(201).json({
         success: true,

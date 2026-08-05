@@ -1,15 +1,8 @@
-const { Pool } = require("pg");
-const RAW_DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
-const DATABASE_URL = RAW_DATABASE_URL.replace(
-  /sslmode=(prefer|require|verify-ca)(?=&|$)/i,
-  "sslmode=verify-full"
-);
-if (!DATABASE_URL) throw new Error("DATABASE_URL est obligatoire pour Neon PostgreSQL.");
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: DATABASE_URL.includes("localhost") ? false : undefined,
-});
-const ready = pool.query(`
+const { pool, ready: coreReady } = require("../database");
+
+// V2: le dashboard et le bot partagent le même pool PostgreSQL.
+// Cela évite de doubler les connexions Neon sur Render.
+const ready = coreReady.then(() => pool.query(`
   CREATE TABLE IF NOT EXISTS officer_notes (
     id BIGSERIAL PRIMARY KEY, user_id TEXT NOT NULL, content TEXT NOT NULL,
     author_id TEXT NOT NULL, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -22,9 +15,11 @@ const ready = pool.query(`
   );
   ALTER TABLE officer_notes ADD COLUMN IF NOT EXISTS read_at TIMESTAMPTZ;
   CREATE INDEX IF NOT EXISTS idx_notes_user ON officer_notes(user_id);
+  CREATE INDEX IF NOT EXISTS idx_notes_user_created ON officer_notes(user_id, created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_notes_unread ON officer_notes(user_id, read_at);
   CREATE INDEX IF NOT EXISTS idx_sanctions_user ON officer_sanctions(user_id);
-`).then(() => console.log("✅ Dashboard connecté à Neon PostgreSQL."));
+  CREATE INDEX IF NOT EXISTS idx_sanctions_user_status ON officer_sanctions(user_id, status, created_at DESC);
+`)).then(() => console.log("✅ Tables Dashboard PostgreSQL prêtes."));
 
 function lim(v,f=50,m=200){const n=parseInt(v,10);return Number.isInteger(n)&&n>0?Math.min(n,m):f}
 function txt(v,n,m){const s=String(v||"").trim();if(!s||s.length>m)throw new Error(`${n} est invalide.`);return s}
@@ -156,5 +151,5 @@ async function getWeeklyBestOfficer(){
   return {user_id:null,weekly_points:0,points_added:0,points_removed:0,...period.rows[0]};
 }
 
-async function closeDatabase(){await pool.end()}
+async function closeDatabase(){ /* pool partagé: fermeture gérée par database.js */ }
 module.exports={listNotes,countUnreadNotes,markNotesRead,addNote,deleteNote,listSanctions,addSanction,updateSanctionStatus,deleteSanction,listActivity,listOfficerActivity,getAttendanceSessions,getAttendanceActive,getAttendanceTotalsDashboard,getAttendanceDaily,getOfficerAttendanceTotal,getWeeklyBestOfficer,closeDatabase};
