@@ -73,6 +73,13 @@ const rest = TOKEN
     }).setToken(TOKEN)
   : null;
 
+// Cache court pour éviter un appel Discord à chaque requête HTTP.
+const authMemberCache = new Map();
+const AUTH_MEMBER_CACHE_TTL_MS = Math.max(
+  10000,
+  Number(process.env.AUTH_MEMBER_CACHE_TTL_MS) || 30000
+);
+
 /* =========================================================
    OUTILS
 ========================================================= */
@@ -180,123 +187,39 @@ function getPermissions(member) {
  * Les autres erreurs Discord sont lancées afin de ne pas
  * supprimer injustement la session d'un policier.
  */
-async function fetchMember(userId) {
-  const normalizedUserId =
-    normalizeDiscordId(userId);
+async function fetchMember(userId, force = false) {
+  const normalizedUserId = normalizeDiscordId(userId);
 
-  if (
-    !rest ||
-    !normalizedUserId ||
-    !GUILD_ID
-  ) {
-    console.error(
-      "❌ Impossible de récupérer le membre Discord : configuration invalide.",
-      {
-        restConfigured: Boolean(rest),
-        userId: normalizedUserId,
-        guildIdConfigured:
-          Boolean(GUILD_ID),
-      }
-    );
-
+  if (!rest || !normalizedUserId || !GUILD_ID) {
+    console.error("❌ Impossible de récupérer le membre Discord : configuration invalide.");
     return null;
+  }
+
+  const cached = authMemberCache.get(normalizedUserId);
+  if (!force && cached && Date.now() - cached.time < AUTH_MEMBER_CACHE_TTL_MS) {
+    return cached.member;
   }
 
   try {
     const member = await rest.get(
-      Routes.guildMember(
-        GUILD_ID,
-        normalizedUserId
-      )
+      Routes.guildMember(GUILD_ID, normalizedUserId)
     );
 
-    const permissions =
-      getPermissions(member);
-
-    console.log(
-      "━━━━━━━━ DEBUG PERMISSIONS DISCORD ━━━━━━━━"
-    );
-
-    console.log(
-      "Utilisateur :",
-      normalizedUserId
-    );
-
-    console.log(
-      "Serveur :",
-      GUILD_ID
-    );
-
-    console.log(
-      "Rôles reçus :",
-      permissions.roles
-    );
-
-    console.log(
-      "Rôle Police attendu :",
-      POLICE_ROLE_IDS
-    );
-
-    console.log(
-      "Rôle High Command attendu :",
-      ROLE_HIGH_COMMAND
-    );
-
-    console.log(
-      "Possède Police :",
-      permissions.hasPoliceRole
-    );
-
-    console.log(
-      "Possède High Command :",
-      permissions.isHighCommand
-    );
-
-    console.log(
-      "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    );
-
+    authMemberCache.set(normalizedUserId, { time: Date.now(), member });
     return member;
   } catch (error) {
-    const status =
-      getDiscordErrorStatus(error);
+    const status = getDiscordErrorStatus(error);
+    const code = getDiscordErrorCode(error);
 
-    const code =
-      getDiscordErrorCode(error);
-
-    /*
-     * 10007 = Unknown Member
-     * 404 = membre introuvable
-     */
-    if (
-      status === 404 ||
-      code === 10007
-    ) {
-      console.warn(
-        `⚠️ Le membre Discord ${normalizedUserId} n'existe pas dans le serveur ${GUILD_ID}.`
-      );
-
+    if (status === 404 || code === 10007) {
+      authMemberCache.delete(normalizedUserId);
       return null;
     }
 
-    console.error(
-      `❌ Erreur Discord pendant la récupération du membre ${normalizedUserId} :`,
-      {
-        status,
-        code,
-        message:
-          error?.message ||
-          String(error),
-      }
-    );
-
-    /*
-     * Une panne Discord ou un problème temporaire ne doit
-     * pas être interprété comme une absence de rôle.
-     */
     throw error;
   }
 }
+
 
 /* =========================================================
    SESSION

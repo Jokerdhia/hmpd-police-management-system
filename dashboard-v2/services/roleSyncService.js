@@ -10,6 +10,8 @@ const {
   clearMemberCache,
 } = require("./discordService");
 
+const { invalidateOfficerCache } = require("./officerService");
+
 const POLICE_ROLE_IDS = String(process.env.ROLE_POLICE || "")
   .split(",")
   .map((roleId) => roleId.trim())
@@ -154,6 +156,8 @@ async function syncPoliceRoles() {
       }
     }
 
+    invalidateOfficerCache();
+
     console.log(
       `✅ Synchronisation Police : ` +
       `${policeMembers.length} actif(s), ` +
@@ -181,8 +185,8 @@ function startRoleSync() {
   );
 
   const interval = Number.isFinite(configuredInterval)
-    ? Math.max(configuredInterval, 15000)
-    : 30000;
+    ? Math.max(configuredInterval, 30000)
+    : 60000;
 
   syncPoliceRoles();
 

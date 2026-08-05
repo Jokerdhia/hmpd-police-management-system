@@ -202,23 +202,26 @@ app.use(
  * les réponses d'authentification et les routes protégées.
  */
 app.use((request, response, next) => {
-  response.setHeader(
-    "Cache-Control",
-    "no-store, no-cache, must-revalidate, private"
-  );
+  const pathname = request.path || "/";
+  const dynamicResponse =
+    pathname === "/" ||
+    pathname.startsWith("/api/") ||
+    pathname === "/login" ||
+    pathname === "/logout" ||
+    pathname.startsWith("/auth/");
 
-  response.setHeader(
-    "Pragma",
-    "no-cache"
-  );
-
-  response.setHeader(
-    "Expires",
-    "0"
-  );
+  if (dynamicResponse) {
+    response.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, private"
+    );
+    response.setHeader("Pragma", "no-cache");
+    response.setHeader("Expires", "0");
+  }
 
   next();
 });
+
 
 /* =========================================================
    ROUTES PUBLIQUES
@@ -304,14 +307,14 @@ const publicDirectory = path.resolve(
 
 app.use(
   express.static(publicDirectory, {
-    etag: false,
-    lastModified: false,
-    maxAge: 0,
+    etag: true,
+    lastModified: true,
+    maxAge: "1h",
 
     setHeaders(response) {
       response.setHeader(
         "Cache-Control",
-        "no-store, no-cache, must-revalidate, private"
+        "private, max-age=3600, must-revalidate"
       );
     },
   })

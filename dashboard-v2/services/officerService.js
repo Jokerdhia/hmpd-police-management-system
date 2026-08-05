@@ -256,18 +256,56 @@ async function enrichOfficers(officers) {
 
 /*
 |--------------------------------------------------------------------------
+| Cache léger du dashboard
+|--------------------------------------------------------------------------
+*/
+
+let officersCache = null;
+let officersCacheAt = 0;
+let officersCachePromise = null;
+const OFFICERS_CACHE_TTL_MS = Math.max(
+  5000,
+  Number(process.env.OFFICERS_CACHE_TTL_MS) || 15000
+);
+
+function invalidateOfficerCache() {
+  officersCache = null;
+  officersCacheAt = 0;
+  officersCachePromise = null;
+}
+
+/*
+|--------------------------------------------------------------------------
 | Lecture des données
 |--------------------------------------------------------------------------
 */
 
 async function listOfficers() {
-  const enriched = await enrichOfficers(await getAllOfficers());
+  const now = Date.now();
 
-  return enriched.filter(
-    (officer) =>
-      officer.is_in_server &&
-      officer.has_police_role
-  );
+  if (officersCache && now - officersCacheAt < OFFICERS_CACHE_TTL_MS) {
+    return officersCache;
+  }
+
+  if (officersCachePromise) {
+    return officersCachePromise;
+  }
+
+  officersCachePromise = (async () => {
+    const enriched = await enrichOfficers(await getAllOfficers());
+    const filtered = enriched.filter(
+      (officer) => officer.is_in_server && officer.has_police_role
+    );
+    officersCache = filtered;
+    officersCacheAt = Date.now();
+    return filtered;
+  })();
+
+  try {
+    return await officersCachePromise;
+  } finally {
+    officersCachePromise = null;
+  }
 }
 
 async function getOfficerProfile(userId) {
@@ -644,6 +682,8 @@ async function modifyOfficerPoints({
       );
     });
   }
+
+  invalidateOfficerCache();
 
   return {
     result,
