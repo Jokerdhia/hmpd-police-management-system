@@ -1,0 +1,9 @@
+HMPD V5.3.7 — HIERARCHY PROTECTION
+
+- Le rôle High Grade conserve l'accès complet au MDT.
+- High Grade peut ajouter/retirer des points aux grades égaux ou inférieurs au sien.
+- Un policier de grade supérieur reste consultable, mais son dossier devient lecture seule.
+- Protection appliquée côté serveur aux points, notes, sanctions, RP Quality, promotions, corrections d'heures, pause forcée et fin forcée.
+- La comparaison utilise le vrai grade Discord, pas le nombre de points.
+- À grade égal, les actions restent autorisées.
+- Si un High Grade n'a aucun grade Police reconnu, il ne peut pas modifier un policier possédant un grade Police reconnu.

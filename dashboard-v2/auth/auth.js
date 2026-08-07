@@ -1185,6 +1185,83 @@ function requireCapability(capability, label = 'Permission insuffisante.') {
   };
 }
 
+
+/* =========================================================
+   HIÉRARCHIE DES CIBLES
+========================================================= */
+
+async function getTargetHierarchyAccess(request, targetUserId) {
+  const actorId = String(request?.session?.user?.id || '').trim();
+  const normalizedTargetId = String(targetUserId || '').trim();
+  const actorPermissions = request?.authPermissions || null;
+
+  if (!actorPermissions) {
+    const error = new Error('Permissions du responsable indisponibles.');
+    error.status = 403;
+    error.publicMessage = error.message;
+    throw error;
+  }
+
+  const targetMember = await fetchMember(normalizedTargetId, false);
+  if (!targetMember) {
+    const error = new Error("Ce policier n'est plus présent sur le serveur Discord.");
+    error.status = 404;
+    error.publicMessage = error.message;
+    throw error;
+  }
+
+  const targetPermissions = getPermissions(targetMember);
+  const actorGrade = actorPermissions.grade || null;
+  const targetGrade = targetPermissions.grade || null;
+  const actorGradeIndex = Number(actorPermissions.gradeIndex ?? -1);
+  const targetGradeIndex = Number(targetPermissions.gradeIndex ?? -1);
+  const isSelf = actorId && actorId === normalizedTargetId;
+
+  // Un grade est considéré supérieur uniquement s'il est réellement reconnu
+  // dans la hiérarchie HMPD. À grade égal, l'action reste autorisée.
+  const targetIsHigher = !isSelf && targetGradeIndex >= 0 && (
+    actorGradeIndex < 0 || targetGradeIndex > actorGradeIndex
+  );
+
+  return {
+    actorId,
+    targetId: normalizedTargetId,
+    actorGrade,
+    targetGrade,
+    actorGradeIndex,
+    targetGradeIndex,
+    isSelf,
+    targetIsHigher,
+    canModifyTarget: !targetIsHigher,
+  };
+}
+
+function requireTargetNotHigher(paramName = 'userId') {
+  return async function targetHierarchyMiddleware(request, response, next) {
+    try {
+      const targetUserId = String(request.params?.[paramName] || '').trim();
+      const access = await getTargetHierarchyAccess(request, targetUserId);
+      request.targetHierarchyAccess = access;
+
+      if (!access.canModifyTarget) {
+        return response.status(403).json({
+          success: false,
+          message: `Action interdite : ${access.targetGrade || 'ce grade'} est supérieur à ton grade ${access.actorGrade || 'non défini'}.`,
+          hierarchy: access,
+        });
+      }
+
+      return next();
+    } catch (error) {
+      const status = Number(error?.status || 503);
+      return response.status(status).json({
+        success: false,
+        message: error?.publicMessage || error?.message || 'Impossible de vérifier la hiérarchie Discord.',
+      });
+    }
+  };
+}
+
 /* =========================================================
    MODÉRATEUR
 ========================================================= */
@@ -1211,4 +1288,6 @@ module.exports = {
   getModeratorId,
   getPermissions,
   fetchMember,
+  getTargetHierarchyAccess,
+  requireTargetNotHigher,
 };

@@ -1,7 +1,7 @@
 const express=require("express");
 const {getAttendanceSessions,getAttendanceActive,getAttendanceTotalsDashboard,getAttendanceDaily}=require("../dashboardDatabase");
 const {listOfficers}=require("../services/officerService");
-const {requireHighCommand,getModeratorId}=require("../auth/auth");
+const {requireHighCommand,requireTargetNotHigher,getModeratorId}=require("../auth/auth");
 const {startAttendance,stopAttendance,pauseAttendance,resumeAttendance,removeAttendanceTime}=require("../../database");
 const {sendChannelMessage}=require("../services/discordService");
 const {broadcast}=require("../services/realtimeService");
@@ -64,7 +64,7 @@ router.post("/me/:action",async(req,res,next)=>{try{
   res.json({success:true,message:messages[action],session:result.session});
 }catch(e){next(e)}});
 
-router.post("/:userId/force-stop",requireHighCommand,async(req,res,next)=>{try{
+router.post("/:userId/force-stop",requireHighCommand,requireTargetNotHigher('userId'),async(req,res,next)=>{try{
   const userId=String(req.params.userId||"").trim();if(!/^\d{16,22}$/.test(userId)){const e=new Error("Identifiant invalide.");e.status=400;e.publicMessage=e.message;throw e}
   const remark=String(req.body?.remark||"").trim();
   if(!remark||remark.length>500){const e=new Error("La remarque est obligatoire (500 caractères maximum).");e.status=400;e.publicMessage=e.message;throw e}
@@ -93,7 +93,7 @@ router.post("/:userId/force-stop",requireHighCommand,async(req,res,next)=>{try{
   res.json({success:true,message:remarkSent?`Fin de service forcée, ${penaltyText}, et remarque envoyée.`:`La fin de service a été enregistrée (${penaltyText}), mais la remarque Discord n’a pas pu être envoyée.`,remarkSent,remarkError,penaltyRequestedSeconds,penaltyRemovedSeconds,penaltyError,session:result.session});
 }catch(e){next(e)}});
 
-router.post("/:userId/force-pause",requireHighCommand,async(req,res,next)=>{try{
+router.post("/:userId/force-pause",requireHighCommand,requireTargetNotHigher('userId'),async(req,res,next)=>{try{
   const userId=String(req.params.userId||"").trim();
   if(!/^\d{16,22}$/.test(userId)){const e=new Error("Identifiant invalide.");e.status=400;e.publicMessage=e.message;throw e}
   const remark=String(req.body?.remark||"").trim();
@@ -126,7 +126,7 @@ router.post("/:userId/force-pause",requireHighCommand,async(req,res,next)=>{try{
   res.json({success:true,message:remarkSent?"Le policier a été mis en pause, la pénalité a été appliquée et la remarque envoyée.":"Le policier a été mis en pause, mais la remarque Discord n’a pas pu être envoyée.",remarkSent,remarkError,penaltyRequestedSeconds,penaltyRemovedSeconds,penaltyError,session:pauseResult.session});
 }catch(e){next(e)}});
 
-router.post("/:userId/remove-time",requireHighCommand,async(req,res,next)=>{try{
+router.post("/:userId/remove-time",requireHighCommand,requireTargetNotHigher('userId'),async(req,res,next)=>{try{
   const userId=String(req.params.userId||"").trim();
   if(!/^\d{16,22}$/.test(userId)){const e=new Error("Identifiant invalide.");e.status=400;e.publicMessage=e.message;throw e}
   const hours=Number(req.body?.hours||0),minutes=Number(req.body?.minutes||0);

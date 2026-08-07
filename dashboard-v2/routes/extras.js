@@ -14,6 +14,7 @@ const {
 const {
   requireHighCommand,
   requireCapability,
+  requireTargetNotHigher,
   getModeratorId,
 } = require("../auth/auth");
 
@@ -167,7 +168,7 @@ router.get("/officers/:userId/notes", async (request, response, next) => {
 router.post(
   "/officers/:userId/notes",
   requireHighCommand,
-  requireCapability,
+  requireTargetNotHigher('userId'),
   async (request, response, next) => {
     try {
       const userId = normalizeDiscordId(
@@ -230,7 +231,7 @@ router.get("/officers/:userId/sanctions", async (request, response, next) => {
 router.post(
   "/officers/:userId/sanctions",
   requireHighCommand,
-  requireCapability,
+  requireTargetNotHigher('userId'),
   async (request, response, next) => {
     try {
       const userId = normalizeDiscordId(
@@ -283,7 +284,7 @@ router.post(
 router.patch(
   "/officers/:userId/sanctions/:id",
   requireCapability('canSanction','Grade Lieutenant ou supérieur requis pour gérer les sanctions.'),
-  requireCapability,
+  requireTargetNotHigher('userId'),
   async (request, response, next) => {
     try {
       const userId = normalizeDiscordId(request.params.userId, "Identifiant du policier");
@@ -302,7 +303,7 @@ router.patch(
 router.delete(
   "/officers/:userId/sanctions/:id",
   requireCapability('canSanction','Grade Lieutenant ou supérieur requis pour gérer les sanctions.'),
-  requireCapability,
+  requireTargetNotHigher('userId'),
   async (request, response, next) => {
     try {
       const userId = normalizeDiscordId(request.params.userId, "Identifiant du policier");

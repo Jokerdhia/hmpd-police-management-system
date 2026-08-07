@@ -9,6 +9,8 @@ const {
 
 const {
   requireHighCommand,
+  requireTargetNotHigher,
+  getTargetHierarchyAccess,
   getModeratorId,
 } = require("../auth/auth");
 
@@ -87,10 +89,13 @@ router.get("/:userId", async (request, response, next) => {
     const userId = normalizeDiscordId(request.params.userId);
     if (request.authPermissions && !request.authPermissions.canViewAllOfficers && userId !== String(getModeratorId(request))) { const e=new Error('Tu peux consulter uniquement ton propre dossier.'); e.status=403; throw e; }
     const officer = await getOfficerProfile(userId);
+    const targetAccess = await getTargetHierarchyAccess(request, userId);
+    officer.target_access = targetAccess;
 
     return response.status(200).json({
       success: true,
       officer,
+      targetAccess,
     });
   } catch (error) {
     return next(error);
@@ -100,6 +105,7 @@ router.get("/:userId", async (request, response, next) => {
 router.post(
   "/:userId/points",
   requireHighCommand,
+  requireTargetNotHigher('userId'),
   async (request, response, next) => {
     try {
       const userId = normalizeDiscordId(request.params.userId);
