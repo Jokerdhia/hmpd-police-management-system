@@ -1,0 +1,13 @@
+HMPD V5.3.4 — HIGH GRADE FULL ACCESS
+
+- Le rôle Discord High Grade donne accès complet au MDT.
+- Fonctionne même si le membre ne possède pas le rôle Police.
+- Accès complet : policiers, présence admin, points, notes, sanctions, RP Quality, promotions, approbation/refus/report, Commandement et audit.
+- ROLE_HIGH_GRADE est supporté dans .env.
+- ROLE_HIGH_COMMAND reste accepté pour compatibilité avec les anciennes configurations.
+- Les permissions par grade Police restent inchangées pour les membres qui ne possèdent pas High Grade.
+
+Configuration recommandée :
+ROLE_HIGH_GRADE=ID_DU_ROLE_HIGH_GRADE
+
+Si ROLE_HIGH_GRADE est absent, le bot utilise ROLE_HIGH_COMMAND.

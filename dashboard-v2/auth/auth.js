@@ -52,7 +52,8 @@ const POLICE_ROLE_IDS = String(
   .filter(Boolean);
 
 const ROLE_HIGH_COMMAND = String(
-  process.env.ROLE_HIGH_COMMAND ||
+  process.env.ROLE_HIGH_GRADE ||
+    process.env.ROLE_HIGH_COMMAND ||
     DEFAULT_HIGH_COMMAND_ROLE_ID
 ).trim();
 
@@ -135,8 +136,8 @@ function getDiscordErrorCode(error) {
  * - modification des points ;
  * - actions administratives protégées.
  *
- * High Command sans Police :
- * - aucun accès.
+ * High Grade sans Police :
+ * - accès complet au MDT.
  */
 function getPermissions(member) {
   const memberRoles = Array.isArray(member?.roles)
@@ -153,6 +154,10 @@ function getPermissions(member) {
   const gradeIndex = getGradeIndex(grade);
   const atLeast = (name) => gradeIndex >= 0 && gradeIndex >= getGradeIndex(name);
 
+  // Le rôle High Grade est un passe-partout administratif :
+  // il donne accès à toutes les fonctions du MDT, même sans rôle Police.
+  const canEnterMdt = hasPoliceRole || isHighCommand;
+
   return {
     roles: memberRoles,
     grade,
@@ -160,15 +165,15 @@ function getPermissions(member) {
     isPolice: hasPoliceRole,
     hasPoliceRole,
     isHighCommand,
-    canView: hasPoliceRole,
-    canViewAllOfficers: hasPoliceRole && atLeast('Sergeant'),
-    canEvaluate: hasPoliceRole && atLeast('Sergeant'),
-    canSanction: hasPoliceRole && atLeast('Lieutenant'),
-    canManagePoints: hasPoliceRole && atLeast('Lieutenant'),
-    canManagePromotions: hasPoliceRole && atLeast('Captain'),
-    canApprovePromotions: hasPoliceRole && (isHighCommand || atLeast('Deputy Chief')),
-    canViewCommandCenter: hasPoliceRole && atLeast('Lieutenant'),
-    canFullAdmin: hasPoliceRole && grade === 'Chief Police',
+    canView: canEnterMdt,
+    canViewAllOfficers: isHighCommand || (hasPoliceRole && atLeast('Sergeant')),
+    canEvaluate: isHighCommand || (hasPoliceRole && atLeast('Sergeant')),
+    canSanction: isHighCommand || (hasPoliceRole && atLeast('Lieutenant')),
+    canManagePoints: isHighCommand || (hasPoliceRole && atLeast('Lieutenant')),
+    canManagePromotions: isHighCommand || (hasPoliceRole && atLeast('Captain')),
+    canApprovePromotions: isHighCommand || (hasPoliceRole && atLeast('Deputy Chief')),
+    canViewCommandCenter: isHighCommand || (hasPoliceRole && atLeast('Lieutenant')),
+    canFullAdmin: isHighCommand || (hasPoliceRole && grade === 'Chief Police'),
   };
 }
 
@@ -593,10 +598,10 @@ function registerAuthRoutes(app) {
           getPermissions(member);
 
         if (
-          !permissions.hasPoliceRole
+          !permissions.canView
         ) {
           console.warn(
-            "⛔ Connexion refusée : rôle Police absent.",
+            "⛔ Connexion refusée : rôle Police/High Grade absent.",
             {
               userId: user.id,
               receivedRoles:
@@ -801,7 +806,7 @@ function registerAuthRoutes(app) {
           getPermissions(member);
 
         if (
-          !permissions.hasPoliceRole
+          !permissions.canView
         ) {
           await destroySession(
             request
@@ -921,11 +926,10 @@ async function requireAuth(
       getPermissions(member);
 
     /*
-     * Le rôle Police suffit pour entrer.
-     * High Command n'est pas vérifié ici.
+     * Le rôle Police ou le rôle High Grade suffit pour entrer.
      */
     if (
-      !permissions.hasPoliceRole
+      !permissions.canView
     ) {
       await destroySession(
         request
@@ -1042,7 +1046,7 @@ async function requireHighCommand(
       getPermissions(member);
 
     if (
-      !permissions.hasPoliceRole
+      !permissions.canView
     ) {
       await destroySession(
         request
@@ -1058,7 +1062,7 @@ async function requireHighCommand(
           success: false,
           authenticated: false,
           message:
-            "Tu dois posséder le rôle Police.",
+            "Tu dois posséder le rôle Police ou High Grade.",
           loginUrl: "/login",
         });
     }
@@ -1123,7 +1127,7 @@ function requireCapability(capability, label = 'Permission insuffisante.') {
       const member = await fetchMember(sessionUser.id);
       if (!member) return response.status(403).json({success:false,message:"Tu n'es plus membre du serveur HMPD."});
       const permissions = getPermissions(member);
-      if (!permissions.hasPoliceRole) return response.status(403).json({success:false,message:'Le rôle Police est nécessaire.'});
+      if (!permissions.canView) return response.status(403).json({success:false,message:'Le rôle Police ou High Grade est nécessaire.'});
       if (!permissions[capability]) return response.status(403).json({success:false,message:label});
       request.authPermissions = permissions;
       return next();
