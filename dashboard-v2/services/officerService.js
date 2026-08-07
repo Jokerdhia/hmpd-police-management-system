@@ -7,6 +7,7 @@ const {
 } = require("../../database");
 
 const {
+  GRADES,
   getGradeFromPoints,
   getNextGrade,
   getNextGradeByName,
