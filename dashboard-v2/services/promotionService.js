@@ -218,10 +218,13 @@ async function setCaseStatus({userId,status,reason,actorId}){
   return getPromotionProfile(userId,actorId);
 }
 
-async function approvePromotion({userId,reason,actorId}){
+async function approvePromotion({userId,reason,force=false,actorId}){
   const p=await getPromotionProfile(userId,actorId); if(!p.case)throw Object.assign(new Error('Aucune promotion disponible.'),{status:400});
-  if(!p.progress.eligible && !p.progress.appointmentOnly)throw Object.assign(new Error('Toutes les conditions obligatoires ne sont pas remplies.'),{status:400});
-  if(p.progress.activeSanctions>0)throw Object.assign(new Error('La promotion est gelée par une sanction active.'),{status:400});
+  const forced=Boolean(force);
+  const cleanReason=clean(reason,2000)||'';
+  if(forced && cleanReason.length<3)throw Object.assign(new Error('Un motif est obligatoire pour forcer une promotion.'),{status:400});
+  if(!forced && !p.progress.eligible && !p.progress.appointmentOnly)throw Object.assign(new Error('Toutes les conditions obligatoires ne sont pas remplies.'),{status:400});
+  if(!forced && p.progress.activeSanctions>0)throw Object.assign(new Error('La promotion est gelée par une sanction active.'),{status:400});
   const target=GRADES.find(g=>g.name===p.case.to_grade); if(!target?.roleId)throw new Error(`Rôle Discord manquant pour ${p.case.to_grade}.`);
   const currentIndex=getGradeIndex(p.case.from_grade), targetIndex=getGradeIndex(p.case.to_grade); if(targetIndex!==currentIndex+1)throw new Error('Transition de grade invalide.');
   await setMemberGradeRole(userId,target.roleId);
@@ -234,13 +237,13 @@ async function approvePromotion({userId,reason,actorId}){
     if(oldPoints!==referencePoints){
       await client.query(`INSERT INTO points_history(user_id,action,amount,old_points,new_points,reason,moderator_id) VALUES($1,$2,$3,$4,$5,$6,$7)`,[userId,referencePoints>oldPoints?'add':'remove',Math.abs(referencePoints-oldPoints),oldPoints,referencePoints,`Synchronisation des points de référence après promotion ${p.case.from_grade} → ${p.case.to_grade}`,String(actorId)]);
     }
-    await client.query(`UPDATE promotion_cases SET status='approved',decision_reason=$2,decided_by=$3,decided_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=$1`,[p.case.id,clean(reason,2000)||null,String(actorId)]);
-    await client.query(`INSERT INTO grade_history(user_id,from_grade,to_grade,action,reason,actor_id) VALUES($1,$2,$3,'promotion',$4,$5)`,[userId,p.case.from_grade,p.case.to_grade,clean(reason,2000)||null,String(actorId)]);
+    await client.query(`UPDATE promotion_cases SET status='approved',decision_reason=$2,decided_by=$3,decided_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=$1`,[p.case.id,cleanReason||null,String(actorId)]);
+    await client.query(`INSERT INTO grade_history(user_id,from_grade,to_grade,action,reason,actor_id) VALUES($1,$2,$3,'promotion',$4,$5)`,[userId,p.case.from_grade,p.case.to_grade,forced?`[FORCÉ] ${cleanReason}`:(cleanReason||null),String(actorId)]);
     await client.query('COMMIT');
   }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e}finally{client.release()}
   invalidateOfficerCache();
-  if(PROMOTION_CHANNEL_ID) await sendChannelMessage(PROMOTION_CHANNEL_ID,{content:`🎉 Félicitations <@${userId}> !`,embeds:[{color:0xf1c40f,title:'🎖️ PROMOTION OFFICIELLE',description:`👤 **Agent :** <@${userId}>\n⬆️ **Ancien grade :** ${p.case.from_grade}\n🏅 **Nouveau grade :** ${p.case.to_grade}\n⭐ **Points synchronisés au grade :** ${Number(target.points||0)}\n\n*La promotion a été validée par le High Command.*`,timestamp:new Date().toISOString()}],allowed_mentions:{users:[userId],parse:[]}}).catch(()=>{});
-  await audit({actorId,action:'promotion.approved',targetId:userId,details:{from:p.case.from_grade,to:p.case.to_grade,reason:clean(reason,2000)}}).catch(()=>{});
+  if(PROMOTION_CHANNEL_ID) await sendChannelMessage(PROMOTION_CHANNEL_ID,{content:`🎉 Félicitations <@${userId}> !`,embeds:[{color:0xf1c40f,title:'🎖️ PROMOTION OFFICIELLE',description:`👤 **Agent :** <@${userId}>\n⬆️ **Ancien grade :** ${p.case.from_grade}\n🏅 **Nouveau grade :** ${p.case.to_grade}\n⭐ **Points synchronisés au grade :** ${Number(target.points||0)}\n\n${forced?'⚡ **Promotion forcée par le High Command.**':'*La promotion a été validée par le High Command.*'}`,timestamp:new Date().toISOString()}],allowed_mentions:{users:[userId],parse:[]}}).catch(()=>{});
+  await audit({actorId,action:forced?'promotion.force_approved':'promotion.approved',targetId:userId,details:{from:p.case.from_grade,to:p.case.to_grade,reason:cleanReason,forced,daysInRank:p.progress.daysInRank,minDays:p.progress.minDays,eligible:p.progress.eligible,activeSanctions:p.progress.activeSanctions}}).catch(()=>{});
   return getPromotionProfile(userId,actorId);
 }
 

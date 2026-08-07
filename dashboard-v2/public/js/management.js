@@ -106,7 +106,7 @@
       const attendanceBlock=p.requirement?.appointmentOnly?'':`<section class="promo-section"><div class="promo-section-head"><div><h3>📅 Présence requise</h3><p>Une journée compte uniquement à partir de <strong>${dur(progress.minDailySeconds||7200)}</strong> de service réel. Plusieurs sessions du même jour sont additionnées.</p></div><strong>${progress.daysInRank}/${progress.minDays} jours validés</strong></div><div class="attendance-day-grid">${dailyAttendance||'<div class="empty">Aucune journée de présence depuis la prise de grade.</div>'}</div></section>`;
       const criteria=(progress.criteria||[]).map(c=>`<label class="promotion-criterion ${c.completed?'complete':''}"><input type="checkbox" data-criterion-key="${esc(c.key)}" ${c.completed?'checked':''} ${permissions.canManagePromotions&&canModifyTarget?'':'disabled'}><span><strong>${esc(c.label)}</strong>${c.note?`<small>${esc(c.note)}</small>`:''}</span></label>`).join('');
       const reopen=['postponed','rejected'].includes(p.case.status)?'<button class="btn btn-secondary" data-promo-action="progress">↩️ Réouvrir le dossier</button>':'';
-      const statusActions=permissions.canManagePromotions&&canModifyTarget?`<div class="promo-actions">${reopen}<button class="btn btn-secondary" data-promo-action="evaluation" ${!progress.eligible?'disabled':''}>🔵 Mettre en évaluation</button><button class="btn btn-secondary" data-promo-action="postponed">⏳ Reporter</button><button class="btn btn-danger" data-promo-action="rejected">❌ Refuser</button>${permissions.canApprovePromotions?`<button class="btn btn-primary promo-approve" data-promo-action="approve" ${(progress.activeSanctions>0||(!progress.eligible&&!progress.appointmentOnly))?'disabled':''}>✅ Approuver la promotion</button>`:''}</div>`:'<div class="permission-note">🔐 Décision réservée au Captain+ / High Command.</div>';
+      const statusActions=permissions.canManagePromotions&&canModifyTarget?`<div class="promo-actions">${reopen}<button class="btn btn-secondary" data-promo-action="evaluation" ${!progress.eligible?'disabled':''}>🔵 Mettre en évaluation</button><button class="btn btn-secondary" data-promo-action="postponed">⏳ Reporter</button><button class="btn btn-danger" data-promo-action="rejected">❌ Refuser</button>${permissions.canApprovePromotions?(progress.eligible||progress.appointmentOnly?`<button class="btn btn-primary promo-approve" data-promo-action="approve">✅ Approuver la promotion</button>`:`<button class="btn btn-danger promo-approve" data-promo-action="force-approve">⚡ Forcer la promotion</button>`):''}</div>`:'<div class="permission-note">🔐 Décision réservée au Captain+ / High Command.</div>';
       const sanctions=(p.sanctions||[]).map(x=>`<div class="sanction-row ${x.status==='active'?'active':''}"><div><strong>⚠️ ${esc(x.sanction_type)}</strong><p>${esc(x.reason)} · ${dt(x.created_at)}</p></div><div class="sanction-actions"><span>${esc(x.status)}</span>${permissions.canSanction&&canModifyTarget&&x.status==='active'?`<button class="btn btn-secondary" data-sanction-status="expired" data-sanction-id="${x.id}">Clôturer</button>`:''}${permissions.canSanction&&canModifyTarget?`<button class="btn btn-danger" data-sanction-delete="${x.id}">Supprimer</button>`:''}</div></div>`).join('')||'<div class="empty">Aucune sanction.</div>';
       const c=progress.components||{};
       const componentCards=`<div class="career-components"><div><span>📅 Présence</span><strong>${c.presence?.done||0}/${c.presence?.total||0}</strong></div><div><span>📋 Critères</span><strong>${c.criteria?.done||0}/${c.criteria?.total||0}</strong></div><div><span>⭐ RP Quality</span><strong>${c.rp?.score==null?'—':c.rp.score+'/100'}</strong></div><div><span>🛡️ Discipline</span><strong>${c.discipline?.ok?'RAS':'Gelée'}</strong></div></div>`;
@@ -132,11 +132,20 @@
     try{await req(`/api/promotions/${selectedPromotionUser}/evaluations`,{method:'POST',body:{ratings,comment:$('#rpEvaluationComment')?.value||''}});notify('Évaluation RP enregistrée.');await openPromotion(selectedPromotionUser);await load()}catch(e){notify(e.message,false)}
   }
   async function promotionAction(action){
-    const reason=$('#promotionDecisionReason')?.value||'';
+    const reason=$('#promotionDecisionReason')?.value?.trim()||'';
     try{
-      if(action==='approve') await req(`/api/promotions/${selectedPromotionUser}/approve`,{method:'POST',body:{reason}});
-      else await req(`/api/promotions/${selectedPromotionUser}/status`,{method:'POST',body:{status:action,reason}});
-      notify(action==='approve'?'Promotion approuvée et rôle Discord mis à jour.':'Dossier mis à jour.');
+      if(action==='force-approve'){
+        if(reason.length<3){notify('Un motif est obligatoire pour forcer une promotion.',false);return}
+        if(!confirm('Forcer cette promotion malgré les conditions non remplies ? Cette action sera enregistrée dans l’audit.'))return;
+        await req(`/api/promotions/${selectedPromotionUser}/approve`,{method:'POST',body:{reason,force:true}});
+        notify('Promotion forcée et rôle Discord mis à jour.');
+      }else if(action==='approve'){
+        await req(`/api/promotions/${selectedPromotionUser}/approve`,{method:'POST',body:{reason,force:false}});
+        notify('Promotion approuvée et rôle Discord mis à jour.');
+      }else{
+        await req(`/api/promotions/${selectedPromotionUser}/status`,{method:'POST',body:{status:action,reason}});
+        notify('Dossier mis à jour.');
+      }
       await load();await openPromotion(selectedPromotionUser);
     }catch(e){notify(e.message,false)}
   }

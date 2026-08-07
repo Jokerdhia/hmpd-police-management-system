@@ -1,0 +1,7 @@
+HMPD V5.3.9 — Force Promotion
+
+- High Grade / High Command avec canApprovePromotions peut forcer une promotion même si les 7 jours ne sont pas atteints.
+- Le forçage peut contourner les critères incomplets et un gel administratif, avec motif obligatoire.
+- Confirmation explicite côté dashboard.
+- Audit distinct promotion.force_approved avec état du dossier au moment du forçage.
+- La protection hiérarchique reste active : impossible de modifier/promouvoir une cible de grade supérieur.
