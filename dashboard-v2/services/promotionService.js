@@ -73,6 +73,61 @@ function clean(v,max=2000){const s=String(v||'').trim();if(s.length>max)throw Ob
 function normalizeStars(v){const n=Number(v);if(!Number.isInteger(n)||n<1||n>5)throw Object.assign(new Error('Chaque note RP doit être comprise entre 1 et 5.'),{status:400});return n;}
 function rpScore(row){if(!row)return null;const keys=['professionalism','procedures','radio','teamwork','reports','responsiveness','hierarchy'];return Math.round(keys.reduce((a,k)=>a+Number(row[k]||0),0)/(keys.length*5)*100);}
 
+// Une journée de grade n'est validée que si l'agent effectue au moins 2h de service
+// réel ce jour-là. Plusieurs sessions d'une même journée sont additionnées, mais une
+// journée ne peut compter qu'une seule fois. Les calculs utilisent le fuseau Bruxelles.
+const MIN_DAILY_PROMOTION_SECONDS = Math.max(60, Number(process.env.PROMOTION_MIN_DAILY_SECONDS || 7200));
+
+async function getQualifiedRankDays(userId, rankStartedAt){
+  if(!rankStartedAt)return {qualifiedDays:0,totalServiceDays:0,daily:[]};
+  const result=await pool.query(`
+    WITH daily AS (
+      SELECT
+        (started_at AT TIME ZONE 'Europe/Brussels')::date AS service_day,
+        SUM(
+          CASE WHEN ended_at IS NULL THEN GREATEST(0,
+            FLOOR(EXTRACT(EPOCH FROM (COALESCE(paused_at,CURRENT_TIMESTAMP)-started_at)))::int
+            - COALESCE(paused_seconds,0))
+          ELSE COALESCE(duration_seconds,0) END
+        )::bigint AS service_seconds
+      FROM attendance_sessions
+      WHERE user_id=$1
+        AND started_at >= $2::timestamptz
+      GROUP BY 1
+    )
+    SELECT service_day,service_seconds
+    FROM daily
+    ORDER BY service_day DESC`,[userId,rankStartedAt]);
+  const daily=result.rows.map(r=>({day:r.service_day,seconds:Number(r.service_seconds||0),qualified:Number(r.service_seconds||0)>=MIN_DAILY_PROMOTION_SECONDS}));
+  return {
+    qualifiedDays:daily.filter(d=>d.qualified).length,
+    totalServiceDays:daily.length,
+    daily
+  };
+}
+
+
+function isoDay(value){
+  if(!value)return null;
+  const d=new Date(value);
+  return Number.isNaN(d.getTime())?String(value).slice(0,10):new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Brussels',year:'numeric',month:'2-digit',day:'2-digit'}).format(d);
+}
+function lastCalendarDays(daily,count=7){
+  const map=new Map((daily||[]).map(x=>[isoDay(x.day),x]));
+  const fmt=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Brussels',year:'numeric',month:'2-digit',day:'2-digit'});
+  const out=[];
+  for(let i=count-1;i>=0;i--){const d=new Date(Date.now()-i*86400000);const key=fmt.format(d);const row=map.get(key);out.push({day:key,seconds:Number(row?.seconds||0),qualified:Boolean(row?.qualified)});}
+  return out;
+}
+function activityStreak(daily){
+  const qualified=new Set((daily||[]).filter(x=>x.qualified).map(x=>isoDay(x.day)));
+  const fmt=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Brussels',year:'numeric',month:'2-digit',day:'2-digit'});
+  let streak=0;
+  let offset=qualified.has(fmt.format(new Date()))?0:1;
+  while(offset<370){const key=fmt.format(new Date(Date.now()-offset*86400000));if(!qualified.has(key))break;streak++;offset++;}
+  return streak;
+}
+
 async function getOrCreateCase(userId, actorId='SYSTEM'){
   await schemaReady;
   const officer=await getOfficerProfile(safeId(userId));
@@ -96,7 +151,9 @@ async function getPromotionProfile(userId, actorId='SYSTEM'){
   const items=base.requirement.criteria.map(([key,label])=>({key,label,completed:Boolean(map.get(key)?.completed),note:map.get(key)?.note||null,updated_by:map.get(key)?.updated_by||null}));
   const activeSanctions=Number((await pool.query(`SELECT COUNT(*)::int n FROM officer_sanctions WHERE user_id=$1 AND status='active' AND (expires_at IS NULL OR expires_at>CURRENT_TIMESTAMP)`,[userId])).rows[0]?.n||0);
   const rankStarted=(await pool.query(`SELECT rank_started_at FROM officers WHERE user_id=$1`,[userId])).rows[0]?.rank_started_at;
-  const daysInRank=rankStarted?Math.max(0,Math.floor((Date.now()-new Date(rankStarted).getTime())/86400000)):0;
+  const calendarDaysInRank=rankStarted?Math.max(0,Math.floor((Date.now()-new Date(rankStarted).getTime())/86400000)):0;
+  const attendanceDays=await getQualifiedRankDays(userId,rankStarted);
+  const daysInRank=attendanceDays.qualifiedDays;
   const minDays=Number(base.requirement.minDaysInRank||0);
   const daysOk=base.requirement.appointmentOnly?true:daysInRank>=minDays;
   const disciplineOk=activeSanctions===0;
@@ -112,12 +169,28 @@ async function getPromotionProfile(userId, actorId='SYSTEM'){
   const evaluation=(await pool.query(`SELECT * FROM rp_evaluations WHERE user_id=$1 ORDER BY id DESC LIMIT 1`,[userId])).rows[0]||null;
   const history=(await pool.query(`SELECT * FROM grade_history WHERE user_id=$1 ORDER BY id DESC LIMIT 20`,[userId])).rows;
   const sanctions=(await pool.query(`SELECT id,sanction_type,reason,author_id,expires_at,status,created_at FROM officer_sanctions WHERE user_id=$1 ORDER BY id DESC LIMIT 50`,[userId])).rows;
+  const serviceStats=(await pool.query(`SELECT
+    COALESCE(SUM(CASE WHEN started_at>=date_trunc('week',CURRENT_TIMESTAMP) THEN COALESCE(duration_seconds,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (COALESCE(paused_at,CURRENT_TIMESTAMP)-started_at)))::int-COALESCE(paused_seconds,0))) ELSE 0 END),0)::bigint week_seconds,
+    COALESCE(SUM(CASE WHEN started_at>=date_trunc('month',CURRENT_TIMESTAMP) THEN COALESCE(duration_seconds,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (COALESCE(paused_at,CURRENT_TIMESTAMP)-started_at)))::int-COALESCE(paused_seconds,0))) ELSE 0 END),0)::bigint month_seconds
+    FROM attendance_sessions WHERE user_id=$1`,[userId])).rows[0]||{};
+  const evaluations=(await pool.query(`SELECT * FROM rp_evaluations WHERE user_id=$1 ORDER BY id DESC LIMIT 12`,[userId])).rows.map(x=>({...x,score:rpScore(x)}));
+  const currentWeekEvaluation=evaluations.find(x=>new Date(x.created_at).getTime()>=Date.now()-7*86400000)||null;
+  const calendar7=lastCalendarDays(attendanceDays.daily,7);
+  const streak=activityStreak(attendanceDays.daily);
+  const completedKeys=new Set(items.filter(x=>x.completed).map(x=>x.key));
+  const evalScore=rpScore(evaluation);
+  const badges=[];
+  if(evalScore>=90)badges.push({key:'excellent_rp',icon:'🏅',label:'Excellent RP'});
+  if(attendanceDays.qualifiedDays>=7)badges.push({key:'activity_7',icon:'🔥',label:'7/7 Activity'});
+  if(Number(serviceStats.month_seconds||0)>=40*3600)badges.push({key:'patrol_veteran',icon:'🚓',label:'Patrol Veteran'});
+  if(activeSanctions===0)badges.push({key:'clean_record',icon:'🛡️',label:'Discipline exemplaire'});
+  if(completedKeys.has('trained_officer')||completedKeys.has('training_supervision')||completedKeys.has('training_evaluation'))badges.push({key:'field_trainer',icon:'🎓',label:'Field Trainer'});
   const currentCase=(await pool.query(`SELECT * FROM promotion_cases WHERE id=$1`,[base.case.id])).rows[0]||{...base.case,status};
   if(eligible && !currentCase.eligible_notified_at && PROMOTION_CHANNEL_ID){
     const evalScore=rpScore(evaluation);
-    await sendChannelMessage(PROMOTION_CHANNEL_ID,{embeds:[{color:0x2ecc71,title:'🎖️ PROMOTION CANDIDATE',description:`👤 **Agent :** <@${userId}>\n🎖️ **Promotion :** ${base.case.from_grade} → ${base.case.to_grade}\n⭐ **Points d’activité :** ${base.officer.points}\n📅 **Temps au grade :** ${daysInRank} jour(s)${evalScore?`\n🎭 **RP Quality :** ${evalScore}/100`:''}\n⚠️ **Sanctions actives :** ${activeSanctions}\n\n✅ Toutes les conditions du dossier sont remplies.\n**La décision finale appartient au High Command.**`,timestamp:new Date().toISOString()}],allowed_mentions:{parse:[]}}).then(()=>pool.query(`UPDATE promotion_cases SET eligible_notified_at=CURRENT_TIMESTAMP WHERE id=$1 AND eligible_notified_at IS NULL`,[base.case.id])).catch(()=>{});
+    await sendChannelMessage(PROMOTION_CHANNEL_ID,{embeds:[{color:0x2ecc71,title:'🎖️ PROMOTION CANDIDATE',description:`👤 **Agent :** <@${userId}>\n🎖️ **Promotion :** ${base.case.from_grade} → ${base.case.to_grade}\n⭐ **Points d’activité :** ${base.officer.points}\n📅 **Jours de service validés :** ${daysInRank}/${minDays} (minimum ${Math.round(MIN_DAILY_PROMOTION_SECONDS/3600)}h/jour)${evalScore?`\n🎭 **RP Quality :** ${evalScore}/100`:''}\n⚠️ **Sanctions actives :** ${activeSanctions}\n\n✅ Toutes les conditions du dossier sont remplies.\n**La décision finale appartient au High Command.**`,timestamp:new Date().toISOString()}],allowed_mentions:{parse:[]}}).then(()=>pool.query(`UPDATE promotion_cases SET eligible_notified_at=CURRENT_TIMESTAMP WHERE id=$1 AND eligible_notified_at IS NULL`,[base.case.id])).catch(()=>{});
   }
-  return {...base,case:{...currentCase,status},progress:{percent,eligible,appointmentOnly:Boolean(base.requirement.appointmentOnly),daysInRank,minDays,daysOk,activeSanctions,disciplineOk,completed:manualDone,total:items.length,criteria:items},evaluation:evaluation?{...evaluation,score:rpScore(evaluation)}:null,history,sanctions};
+  return {...base,case:{...currentCase,status},progress:{percent,eligible,appointmentOnly:Boolean(base.requirement.appointmentOnly),daysInRank,minDays,daysOk,calendarDaysInRank,minDailySeconds:MIN_DAILY_PROMOTION_SECONDS,totalServiceDays:attendanceDays.totalServiceDays,qualifiedDays:attendanceDays.qualifiedDays,dailyAttendance:attendanceDays.daily.slice(0,14),calendar7,streak,activeSanctions,disciplineOk,completed:manualDone,total:items.length,criteria:items,components:{presence:{done:Math.min(daysInRank,minDays),total:minDays,ok:daysOk},criteria:{done:manualDone,total:items.length,ok:items.every(x=>x.completed)},rp:{score:evalScore,ok:evalScore!==null&&evalScore>=80},discipline:{active:activeSanctions,ok:disciplineOk}}},evaluation:evaluation?{...evaluation,score:rpScore(evaluation)}:null,evaluations,currentWeekEvaluation,serviceStats:{week_seconds:Number(serviceStats.week_seconds||0),month_seconds:Number(serviceStats.month_seconds||0)},badges,history,sanctions};
 }
 
 async function setCriterion({userId,key,completed,note,actorId}){

@@ -1,4 +1,4 @@
-const {
+const { pool,
   getAllOfficers,
   getOfficer,
   deleteOfficersCompletely,
@@ -33,6 +33,15 @@ function hasPoliceRole(member) {
   );
 }
 
+
+async function cleanupOperationalData(){
+  const maxHours=Math.max(6,Number(process.env.MAX_OPEN_ATTENDANCE_HOURS||18));
+  const auditDays=Math.max(30,Number(process.env.AUDIT_RETENTION_DAYS||180));
+  const closed=await pool.query(`UPDATE attendance_sessions SET ended_at=CURRENT_TIMESTAMP,duration_seconds=GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP-started_at)))::int-COALESCE(paused_seconds,0)),ended_by='SYSTEM',end_reason='Session fermée automatiquement après délai de sécurité' WHERE ended_at IS NULL AND started_at < CURRENT_TIMESTAMP-($1::text||' hours')::interval RETURNING id`,[String(maxHours)]).catch(()=>({rowCount:0}));
+  const audit=await pool.query(`DELETE FROM admin_audit_log WHERE created_at < CURRENT_TIMESTAMP-($1::text||' days')::interval`,[String(auditDays)]).catch(()=>({rowCount:0}));
+  if((closed.rowCount||0)>0||(audit.rowCount||0)>0)console.log(`🧹 Maintenance DB : ${closed.rowCount||0} session(s) abandonnée(s) fermée(s), ${audit.rowCount||0} audit(s) ancien(s) supprimé(s).`);
+}
+
 /**
  * Synchronise Discord vers Neon :
  *
@@ -55,6 +64,7 @@ async function syncPoliceRoles() {
 
   try {
     clearMemberCache();
+    await cleanupOperationalData();
 
     const members = await listGuildMembers();
     const policeMembers = members.filter(

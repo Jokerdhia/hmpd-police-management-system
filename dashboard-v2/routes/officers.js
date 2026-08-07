@@ -45,7 +45,11 @@ function normalizeLimit(value, fallback = 25, maximum = 50) {
 
 router.get("/", async (request, response, next) => {
   try {
-    const officers = await listOfficers();
+    let officers = await listOfficers();
+    if (request.authPermissions && !request.authPermissions.canViewAllOfficers) {
+      const selfId=String(getModeratorId(request));
+      officers=officers.filter(o=>String(o.user_id)===selfId);
+    }
 
     return response.status(200).json({
       success: true,
@@ -64,6 +68,7 @@ router.get("/", async (request, response, next) => {
 router.get("/:userId/history", async (request, response, next) => {
   try {
     const userId = normalizeDiscordId(request.params.userId);
+    if (request.authPermissions && !request.authPermissions.canViewAllOfficers && userId !== String(getModeratorId(request))) { const e=new Error('Tu peux consulter uniquement ton propre dossier.'); e.status=403; throw e; }
     const limit = normalizeLimit(request.query.limit);
     const history = await getHistory(userId, limit);
 
@@ -80,6 +85,7 @@ router.get("/:userId/history", async (request, response, next) => {
 router.get("/:userId", async (request, response, next) => {
   try {
     const userId = normalizeDiscordId(request.params.userId);
+    if (request.authPermissions && !request.authPermissions.canViewAllOfficers && userId !== String(getModeratorId(request))) { const e=new Error('Tu peux consulter uniquement ton propre dossier.'); e.status=403; throw e; }
     const officer = await getOfficerProfile(userId);
 
     return response.status(200).json({

@@ -1,0 +1,14 @@
+HMPD V5.2 — RÈGLE DE PRÉSENCE POUR PROMOTION
+
+Nouvelle règle :
+- Une journée de promotion est validée uniquement si le policier cumule au moins 2h00 de service réel pendant cette journée.
+- Plusieurs prises de service dans la même journée sont additionnées.
+- Une journée compte au maximum 1 fois, même avec plus de 2 heures.
+- Moins de 2 heures dans une journée = 0 journée validée.
+- Pour une exigence de 7 jours, il faut donc 7 journées distinctes à 2h00 minimum chacune.
+- Le calcul commence à rank_started_at (date de prise du grade actuel).
+- Les pauses sont déduites du temps réel selon les données de attendance_sessions.
+
+Option :
+PROMOTION_MIN_DAILY_SECONDS=7200
+Permet de changer le seuil plus tard sans modifier le code.

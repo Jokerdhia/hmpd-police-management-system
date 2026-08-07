@@ -1,0 +1,33 @@
+HMPD MDT V5.3 — PERFORMANCE & CAREER
+=====================================
+
+NOUVEAUTES PRINCIPALES
+- Journée de promotion validée uniquement avec >= 2h de service réel.
+- Calendrier des 7 derniers jours dans le dossier de promotion.
+- Série d'activité (streak) calculée sur les journées validées.
+- Progression de carrière détaillée : présence / critères / RP Quality / discipline.
+- Statistiques personnelles : semaine, mois, jours validés, série.
+- Badges internes dynamiques : Excellent RP, 7/7 Activity, Patrol Veteran, Discipline exemplaire, Field Trainer.
+- Historique des évaluations RP dans le dossier.
+- Evaluations RP autorisées à partir de Sergeant.
+- Sanctions autorisées à partir de Lieutenant.
+- Gestion des dossiers de promotion à partir de Captain.
+- Approbation finale réservée au High Command / Deputy Chief+.
+- Chief Police conserve l'accès complet.
+- Officer / Senior Officer ne peuvent consulter que leur propre dossier policier.
+- Score performance /100 enrichi avec RP Quality et discipline.
+- Meilleur policier de la semaine basé sur performance globale, pas uniquement les points.
+- Centre de commandement : excellentes performances + agents à surveiller.
+- Nettoyage automatique des sessions de présence abandonnées (>18h par défaut).
+- Conservation audit configurable (180 jours par défaut).
+- Suppression complète Neon dès retrait du rôle Police ou départ du serveur (fonction V5.1 conservée).
+- Centre promotions paginé et calculs parallélisés (fonction V5.1 conservée).
+- Améliorations responsive mobile/tablette.
+
+VARIABLES ENV OPTIONNELLES
+PROMOTION_MIN_DAILY_SECONDS=7200
+MAX_OPEN_ATTENDANCE_HOURS=18
+AUDIT_RETENTION_DAYS=180
+
+IMPORTANT
+Les points restent uniquement un indicateur d'activité. Ils ne provoquent aucune promotion automatique.

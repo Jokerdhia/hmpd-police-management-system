@@ -1,5 +1,6 @@
 const crypto = require("crypto");
 const { REST, Routes } = require("discord.js");
+const { getDiscordGradeFromRoles, getGradeIndex } = require("../config/grades");
 
 /* =========================================================
    CONFIGURATION
@@ -138,38 +139,36 @@ function getDiscordErrorCode(error) {
  * - aucun accès.
  */
 function getPermissions(member) {
-  const memberRoles = Array.isArray(
-    member?.roles
-  )
-    ? member.roles.map((roleId) =>
-        String(roleId).trim()
-      )
+  const memberRoles = Array.isArray(member?.roles)
+    ? member.roles.map((roleId) => String(roleId).trim())
     : [];
 
-  const hasPoliceRole =
-    POLICE_ROLE_IDS.some((policeRoleId) =>
-      memberRoles.includes(policeRoleId)
-    );
-
-  const isHighCommand = Boolean(
-    ROLE_HIGH_COMMAND &&
-      memberRoles.includes(
-        ROLE_HIGH_COMMAND
-      )
+  const hasPoliceRole = POLICE_ROLE_IDS.some((policeRoleId) =>
+    memberRoles.includes(policeRoleId)
   );
+  const isHighCommand = Boolean(
+    ROLE_HIGH_COMMAND && memberRoles.includes(ROLE_HIGH_COMMAND)
+  );
+  const grade = getDiscordGradeFromRoles(memberRoles) || null;
+  const gradeIndex = getGradeIndex(grade);
+  const atLeast = (name) => gradeIndex >= 0 && gradeIndex >= getGradeIndex(name);
 
   return {
     roles: memberRoles,
-
+    grade,
+    gradeIndex,
     isPolice: hasPoliceRole,
     hasPoliceRole,
     isHighCommand,
-
     canView: hasPoliceRole,
-
-    canManagePoints:
-      hasPoliceRole &&
-      isHighCommand,
+    canViewAllOfficers: hasPoliceRole && atLeast('Sergeant'),
+    canEvaluate: hasPoliceRole && atLeast('Sergeant'),
+    canSanction: hasPoliceRole && atLeast('Lieutenant'),
+    canManagePoints: hasPoliceRole && atLeast('Lieutenant'),
+    canManagePromotions: hasPoliceRole && atLeast('Captain'),
+    canApprovePromotions: hasPoliceRole && (isHighCommand || atLeast('Deputy Chief')),
+    canViewCommandCenter: hasPoliceRole && atLeast('Lieutenant'),
+    canFullAdmin: hasPoliceRole && grade === 'Chief Police',
   };
 }
 
@@ -745,7 +744,15 @@ function registerAuthRoutes(app) {
 
             permissions: {
               canView: true,
+              grade: 'Chief Police',
+              canViewAllOfficers: true,
+              canEvaluate: true,
+              canSanction: true,
               canManagePoints: true,
+              canManagePromotions: true,
+              canApprovePromotions: true,
+              canViewCommandCenter: true,
+              canFullAdmin: true,
             },
           });
         }
@@ -835,9 +842,15 @@ function registerAuthRoutes(app) {
 
           permissions: {
             canView: true,
-
-            canManagePoints:
-              permissions.canManagePoints,
+            grade: permissions.grade,
+            canViewAllOfficers: permissions.canViewAllOfficers,
+            canEvaluate: permissions.canEvaluate,
+            canSanction: permissions.canSanction,
+            canManagePoints: permissions.canManagePoints,
+            canManagePromotions: permissions.canManagePromotions,
+            canApprovePromotions: permissions.canApprovePromotions,
+            canViewCommandCenter: permissions.canViewCommandCenter,
+            canFullAdmin: permissions.canFullAdmin,
           },
         });
       } catch (error) {
@@ -1101,6 +1114,26 @@ async function requireHighCommand(
   }
 }
 
+function requireCapability(capability, label = 'Permission insuffisante.') {
+  return async function capabilityMiddleware(request, response, next) {
+    if (!oauthEnabled && !isProduction) return next();
+    const sessionUser = request.session?.user;
+    if (!sessionUser?.id) return response.status(401).json({success:false,message:'Connexion Discord requise.',loginUrl:'/login'});
+    try {
+      const member = await fetchMember(sessionUser.id);
+      if (!member) return response.status(403).json({success:false,message:"Tu n'es plus membre du serveur HMPD."});
+      const permissions = getPermissions(member);
+      if (!permissions.hasPoliceRole) return response.status(403).json({success:false,message:'Le rôle Police est nécessaire.'});
+      if (!permissions[capability]) return response.status(403).json({success:false,message:label});
+      request.authPermissions = permissions;
+      return next();
+    } catch (error) {
+      console.error(`❌ Erreur permission ${capability}:`, error);
+      return response.status(503).json({success:false,message:'Discord est temporairement inaccessible.'});
+    }
+  };
+}
+
 /* =========================================================
    MODÉRATEUR
 ========================================================= */
@@ -1123,6 +1156,7 @@ module.exports = {
   registerAuthRoutes,
   requireAuth,
   requireHighCommand,
+  requireCapability,
   getModeratorId,
   getPermissions,
   fetchMember,

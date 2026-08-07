@@ -13,6 +13,7 @@ const {
 
 const {
   requireHighCommand,
+  requireCapability,
   getModeratorId,
 } = require("../auth/auth");
 
@@ -34,6 +35,13 @@ function normalizeDiscordId(value, label = "Identifiant Discord") {
   return id;
 }
 
+
+function enforceProfileVisibility(request,userId){
+  const permissions=request.authPermissions;
+  if(permissions && !permissions.canViewAllOfficers && String(userId)!==String(getModeratorId(request))){
+    const e=new Error('Tu peux consulter uniquement ton propre dossier.');e.status=403;e.publicMessage=e.message;throw e;
+  }
+}
 function cleanText(value, min, max, label) {
   const text = String(value || "").trim();
 
@@ -142,6 +150,7 @@ router.get("/officers/:userId/notes", async (request, response, next) => {
       request.params.userId,
       "Identifiant du policier"
     );
+    enforceProfileVisibility(request,userId);
 
     const notes = await listNotes(userId);
 
@@ -158,6 +167,7 @@ router.get("/officers/:userId/notes", async (request, response, next) => {
 router.post(
   "/officers/:userId/notes",
   requireHighCommand,
+  requireCapability,
   async (request, response, next) => {
     try {
       const userId = normalizeDiscordId(
@@ -203,6 +213,7 @@ router.get("/officers/:userId/sanctions", async (request, response, next) => {
       request.params.userId,
       "Identifiant du policier"
     );
+    enforceProfileVisibility(request,userId);
 
     const sanctions = await listSanctions(userId);
 
@@ -219,6 +230,7 @@ router.get("/officers/:userId/sanctions", async (request, response, next) => {
 router.post(
   "/officers/:userId/sanctions",
   requireHighCommand,
+  requireCapability,
   async (request, response, next) => {
     try {
       const userId = normalizeDiscordId(
@@ -270,7 +282,8 @@ router.post(
 
 router.patch(
   "/officers/:userId/sanctions/:id",
-  requireHighCommand,
+  requireCapability('canSanction','Grade Lieutenant ou supérieur requis pour gérer les sanctions.'),
+  requireCapability,
   async (request, response, next) => {
     try {
       const userId = normalizeDiscordId(request.params.userId, "Identifiant du policier");
@@ -288,7 +301,8 @@ router.patch(
 
 router.delete(
   "/officers/:userId/sanctions/:id",
-  requireHighCommand,
+  requireCapability('canSanction','Grade Lieutenant ou supérieur requis pour gérer les sanctions.'),
+  requireCapability,
   async (request, response, next) => {
     try {
       const userId = normalizeDiscordId(request.params.userId, "Identifiant du policier");

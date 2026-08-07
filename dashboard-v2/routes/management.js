@@ -1,8 +1,8 @@
 const express=require('express');
-const {requireHighCommand}=require('../auth/auth');
+const {requireCapability}=require('../auth/auth');
 const {getManagementSnapshot,getOfficerTimeline,listAudit,getWeeklyReport}=require('../services/managementService');
 const router=express.Router();
-router.use(requireHighCommand);
+router.use(requireCapability('canViewCommandCenter','Grade Lieutenant ou supérieur requis pour le Centre de commandement.'));
 router.get('/overview',async(req,res,next)=>{try{res.json({success:true,...await getManagementSnapshot()})}catch(e){next(e)}});
 router.get('/officers/:userId/timeline',async(req,res,next)=>{try{res.json({success:true,timeline:await getOfficerTimeline(req.params.userId,req.query.limit)})}catch(e){next(e)}});
 router.get('/audit',async(req,res,next)=>{try{res.json({success:true,audit:await listAudit(req.query.limit)})}catch(e){next(e)}});
