@@ -1,0 +1,29 @@
+HMPD MDT V5 — CAREER & PROMOTION CENTER
+
+PRINCIPALES CORRECTIONS
+- Nouvelle page 🎖 Promotions séparée du Centre de commandement.
+- Tous les dossiers de carrière sont visibles avec recherche et filtres.
+- Statuts : progression, éligible, évaluation, gelée, reportée.
+- Compteurs dédiés : dossiers actifs, éligibles, évaluations et gelées.
+- Liste Policiers : colonne Promotion avec statut et progression.
+- Profil policier : points clairement identifiés comme points d’activité.
+- Onglets Promotion, RP Quality et Sanctions pour High Command.
+- Accès direct au dossier officiel depuis le profil.
+- Classement renommé en classement d’activité.
+- Tableau de bord : terminologie corrigée pour éviter toute confusion points/promotion.
+- Centre de commandement recentré sur alertes, performance, décisions et audit.
+- Filtres de promotion restylés pour correspondre au MDT.
+- Promotions automatiques toujours désactivées.
+- Une sanction active gèle la promotion.
+- L’approbation High Command reste la seule action qui change le rôle Discord.
+
+INSTALLATION
+1. Sauvegarde ton ancien .env.
+2. Remplace les fichiers du projet par ceux de cette V5.
+3. Remets ton .env si tu testes en local.
+4. npm install
+5. npm run check
+6. npm start
+
+IMPORTANT
+Le ZIP V5 ne contient volontairement pas le fichier .env ni node_modules. Les variables Render restent configurées directement dans Render.

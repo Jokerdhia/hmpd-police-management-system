@@ -4,7 +4,7 @@
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const dur=s=>`${Math.floor(Number(s||0)/3600)}h ${String(Math.floor(Number(s||0)%3600/60)).padStart(2,'0')}m`;
   const dt=v=>v?new Date(v).toLocaleString('fr-FR'):'Jamais';
-  let data=null,promotions=[],promoFilter='all',selectedPromotionUser=null;
+  let data=null,promotions=[],promoFilter='eligible',promoPageFilter='all',promoSearch='',selectedPromotionUser=null;
 
   async function req(url,options={}){
     const init={cache:'no-store',...options};
@@ -31,15 +31,34 @@
     const m=statusMeta(p.status),pct=Number(p.progress.percent||0);
     return `<div class="promo-card-progress"><div><span>${m[0]} ${esc(m[1])}</span><strong>${pct}%</strong></div><div class="promo-track"><i style="width:${pct}%"></i></div></div>`;
   }
+  function statusCounts(){
+    const count=status=>promotions.filter(p=>p.status===status).length;
+    return {all:promotions.length,progress:count('progress'),eligible:count('eligible'),evaluation:count('evaluation'),frozen:count('frozen'),postponed:count('postponed')};
+  }
+  function careerCard(p){
+    const m=statusMeta(p.status),pct=Number(p.progress?.percent||0),done=Number(p.progress?.completed||0),total=Number(p.progress?.total||0),days=Number(p.progress?.daysInRank||0),sanctions=Number(p.progress?.activeSanctions||0);
+    return `<button class="career-card status-${esc(p.status)}" data-promotion-user="${p.user_id}">
+      <div class="career-top"><img class="career-avatar" src="${esc(p.avatar_url||'https://cdn.discordapp.com/embed/avatars/0.png')}" alt=""><div class="career-id"><strong>${esc(p.display_name||p.user_id)}</strong><span>${esc(p.grade)} → ${esc(p.to_grade)}</span></div><span class="career-status">${m[0]} ${esc(m[1])}</span></div>
+      <div class="career-meta"><span>Critères <b>${done}/${total}</b></span><span>Grade <b>${days} j</b></span><span>RP <b>${p.evaluation?`${p.evaluation.score}/100`:'—'}</b></span><span>Discipline <b>${sanctions?`⚠ ${sanctions}`:'RAS'}</b></span></div>
+      <div class="career-track"><i style="width:${pct}%"></i></div><div class="career-foot"><span>Progression du dossier</span><strong>${pct}%</strong></div>
+    </button>`;
+  }
   function renderPromotions(){
-    const box=$('#managementPromotions'); if(!box)return;
-    const list=promotions.filter(p=>promoFilter==='all'||p.status===promoFilter);
-    box.innerHTML=list.map(p=>`<button class="management-row promotion-row status-${esc(p.status)}" data-promotion-user="${p.user_id}">
-      <img class="promo-avatar" src="${esc(p.avatar_url||'https://cdn.discordapp.com/embed/avatars/0.png')}" alt="">
-      <div class="promo-main"><strong>${esc(p.display_name||p.user_id)}</strong><p>${esc(p.grade)} → ${esc(p.to_grade)} · ⭐ ${Number(p.points||0)} points d’activité${p.evaluation?` · RP ${p.evaluation.score}/100`:''}</p>${promotionProgress(p)}</div>
-    </button>`).join('')||'<div class="empty">Aucun dossier dans ce statut.</div>';
-    const eligible=promotions.filter(p=>p.status==='eligible').length;
-    if($('#mgPromotions'))$('#mgPromotions').textContent=eligible;
+    const compact=$('#managementPromotions');
+    if(compact){
+      const list=promotions.filter(p=>p.status===promoFilter).slice(0,10);
+      compact.innerHTML=list.map(p=>`<button class="management-row promotion-row status-${esc(p.status)}" data-promotion-user="${p.user_id}"><img class="promo-avatar" src="${esc(p.avatar_url||'https://cdn.discordapp.com/embed/avatars/0.png')}" alt=""><div class="promo-main"><strong>${esc(p.display_name||p.user_id)}</strong><p>${esc(p.grade)} → ${esc(p.to_grade)}${p.evaluation?` · RP ${p.evaluation.score}/100`:''}</p>${promotionProgress(p)}</div></button>`).join('')||'<div class="empty">Aucun dossier nécessitant une décision.</div>';
+    }
+    const counts=statusCounts();
+    if($('#mgPromotions'))$('#mgPromotions').textContent=counts.eligible;
+    [['#promoTotal',counts.all],['#promoEligible',counts.eligible],['#promoEvaluation',counts.evaluation],['#promoFrozen',counts.frozen],['#promoCountAll',counts.all],['#promoCountProgress',counts.progress],['#promoCountEligible',counts.eligible],['#promoCountEvaluation',counts.evaluation],['#promoCountFrozen',counts.frozen]].forEach(([id,v])=>{const el=$(id);if(el)el.textContent=v});
+    const center=$('#promotionCenterList');
+    if(center){
+      const q=promoSearch.toLowerCase();
+      const list=promotions.filter(p=>(promoPageFilter==='all'||p.status===promoPageFilter)&&(!q||[p.display_name,p.user_id,p.grade,p.to_grade].some(v=>String(v||'').toLowerCase().includes(q))));
+      center.innerHTML=list.map(careerCard).join('')||'<div class="empty">Aucun dossier ne correspond à ce filtre.</div>';
+    }
+    window.updatePromotionBadges?.(promotions);
   }
   function render(filter=''){
     if(!data)return;const q=filter.toLowerCase();
@@ -83,6 +102,8 @@
       $('#promotionModal').classList.remove('hidden');
     }catch(e){notify(e.message,false)}
   }
+  window.openPromotionCase=openPromotion;
+  window.getPromotionCenterData=()=>promotions;
   function closePromotion(){$('#promotionModal')?.classList.add('hidden');selectedPromotionUser=null}
   async function updateCriterion(input){
     const key=input.dataset.criterionKey; input.disabled=true;
@@ -116,9 +137,12 @@
   async function init(){
     try{
       const me=await req('/api/me');if(!me.permissions?.canManagePoints)return;
-      const nav=$('#managementNav');nav?.classList.remove('hidden');nav?.addEventListener('click',()=>{document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));nav.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('#managementPage')?.classList.add('active');$('#pageTitle').textContent='Centre de commandement';$('#pageSubtitle').textContent='Performance, promotions officielles et audit';load()});
-      $('#managementRefresh')?.addEventListener('click',load);$('#managementSearch')?.addEventListener('input',e=>render(e.target.value));$('#copyWeeklyReport')?.addEventListener('click',()=>navigator.clipboard?.writeText($('#weeklyReport').textContent));
+      const nav=$('#managementNav');nav?.classList.remove('hidden');nav?.addEventListener('click',()=>{document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));nav.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('#managementPage')?.classList.add('active');$('#pageTitle').textContent='Centre de commandement';$('#pageSubtitle').textContent='Performance, alertes et audit High Command';load()});
+      const promoNav=$('#promotionsNav');promoNav?.classList.remove('hidden');promoNav?.addEventListener('click',()=>{document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));promoNav.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('#promotionsPage')?.classList.add('active');$('#pageTitle').textContent='Promotions';$('#pageSubtitle').textContent='Dossiers de carrière et validation High Command';load()});
+      $('#managementRefresh')?.addEventListener('click',load);$('#promotionsRefresh')?.addEventListener('click',load);$('#managementSearch')?.addEventListener('input',e=>render(e.target.value));$('#copyWeeklyReport')?.addEventListener('click',()=>navigator.clipboard?.writeText($('#weeklyReport').textContent));
       $('#promotionStatusTabs')?.addEventListener('click',e=>{const b=e.target.closest('[data-promo-filter]');if(!b)return;promoFilter=b.dataset.promoFilter;$$('#promotionStatusTabs button').forEach(x=>x.classList.toggle('active',x===b));renderPromotions()});
+      $('#promotionPageTabs')?.addEventListener('click',e=>{const b=e.target.closest('[data-promo-page-filter]');if(!b)return;promoPageFilter=b.dataset.promoPageFilter;$$('#promotionPageTabs button').forEach(x=>x.classList.toggle('active',x===b));renderPromotions()});
+      $('#promotionSearch')?.addEventListener('input',e=>{promoSearch=e.target.value.trim();renderPromotions()});
       document.addEventListener('click',e=>{const t=e.target.closest('[data-mg-profile]');if(t)timeline(t.dataset.mgProfile);const p=e.target.closest('[data-promotion-user]');if(p)openPromotion(p.dataset.promotionUser);if(e.target.closest('[data-close-promotion],#closePromotionButton'))closePromotion();if(e.target.closest('#saveRpEvaluation'))saveEvaluation();if(e.target.closest('#addSanctionButton'))addSanction();const ss=e.target.closest('[data-sanction-status]');if(ss)sanctionStatus(ss.dataset.sanctionId,ss.dataset.sanctionStatus);const sd=e.target.closest('[data-sanction-delete]');if(sd)deleteSanctionAction(sd.dataset.sanctionDelete);const a=e.target.closest('[data-promo-action]');if(a&&!a.disabled)promotionAction(a.dataset.promoAction)});
       document.addEventListener('change',e=>{if(e.target.matches('[data-criterion-key]'))updateCriterion(e.target)});
     }catch{}

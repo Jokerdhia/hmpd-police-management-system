@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HMPD MDT V3</title>
+  <title>HMPD MDT V5</title>
   <link rel="stylesheet" href="/css/style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
@@ -25,6 +25,7 @@
         <button class="nav-item" data-page="leaderboard"><span>★</span>Classement</button>
         <button class="nav-item" data-page="messages"><span>✉</span><span class="nav-label">Mes messages</span><span class="message-badge hidden" id="messageUnreadBadge">0</span></button>
         <button class="nav-item" data-page="activity"><span>≡</span>Activité</button>
+        <button class="nav-item hidden" id="promotionsNav" data-promotions-page><span>🎖</span>Promotions</button>
         <button class="nav-item hidden" id="managementNav" data-management-page><span>◆</span>Commandement</button>
       </nav>
 
@@ -69,7 +70,7 @@
           </article>
           <article class="stat-card">
             <div class="stat-icon">📊</div>
-            <div><span>Moyenne</span><strong id="averagePoints">0</strong></div>
+            <div><span>Activité moyenne</span><strong id="averagePoints">0</strong><small>Points / policier</small></div>
           </article>
           <article class="stat-card">
             <div class="stat-icon">🏆</div>
@@ -80,7 +81,7 @@
         <div class="dashboard-grid">
           <article class="panel">
             <div class="panel-head">
-              <div><h2>Top policiers</h2><p>Classement actuel</p></div>
+              <div><h2>Top activité</h2><p>Classement indicatif par points — sans promotion automatique</p></div>
             </div>
             <div id="dashboardLeaderboard" class="ranking-list"></div>
           </article>
@@ -118,7 +119,7 @@
           <div class="table-scroll">
             <table>
               <thead>
-                <tr><th>#</th><th>Policier</th><th>Grade</th><th>Points</th><th>Mise à jour</th><th></th></tr>
+                <tr><th>#</th><th>Policier</th><th>Grade</th><th>Activité</th><th>Promotion</th><th>Mise à jour</th><th></th></tr>
               </thead>
               <tbody id="officersTableBody"></tbody>
             </table>
@@ -133,7 +134,7 @@
 
       <section id="leaderboardPage" class="page">
         <article class="panel">
-          <div class="panel-head"><div><h2>Classement HMPD</h2><p>Classement général du département</p></div></div>
+          <div class="panel-head"><div><h2>Classement d’activité HMPD</h2><p>Les points mesurent l’activité et ne déterminent jamais le grade.</p></div></div>
           <div id="fullLeaderboard" class="ranking-list ranking-large"></div>
         </article>
       </section>
@@ -189,6 +190,34 @@
         </article>
       </section>
 
+      <section id="promotionsPage" class="page">
+        <div class="promotion-page-hero">
+          <div><p class="eyebrow">HMPD • OFFICIAL PROMOTION SYSTEM</p><h2>Centre des promotions</h2><p>Suivi des carrières, qualité RP, discipline et décisions High Command.</p></div>
+          <button class="btn btn-secondary" id="promotionsRefresh">Actualiser</button>
+        </div>
+        <div class="stats-grid promotion-page-stats">
+          <article class="stat-card"><div class="stat-icon">📂</div><div><span>Dossiers actifs</span><strong id="promoTotal">0</strong></div></article>
+          <article class="stat-card"><div class="stat-icon">🟢</div><div><span>Éligibles</span><strong id="promoEligible">0</strong></div></article>
+          <article class="stat-card"><div class="stat-icon">🔵</div><div><span>En évaluation</span><strong id="promoEvaluation">0</strong></div></article>
+          <article class="stat-card"><div class="stat-icon">🔒</div><div><span>Gelées</span><strong id="promoFrozen">0</strong></div></article>
+        </div>
+        <article class="panel panel-spaced">
+          <div class="panel-head promotion-toolbar">
+            <div><h2>Dossiers de carrière</h2><p>Tous les policiers ayant une prochaine étape de carrière apparaissent ici.</p></div>
+            <input id="promotionSearch" class="search" type="search" placeholder="Rechercher nom, badge, grade...">
+          </div>
+          <div id="promotionPageTabs" class="promotion-tabs premium-tabs">
+            <button data-promo-page-filter="all" class="active">Tous <span id="promoCountAll">0</span></button>
+            <button data-promo-page-filter="progress">En progression <span id="promoCountProgress">0</span></button>
+            <button data-promo-page-filter="eligible">Éligibles <span id="promoCountEligible">0</span></button>
+            <button data-promo-page-filter="evaluation">Évaluation <span id="promoCountEvaluation">0</span></button>
+            <button data-promo-page-filter="frozen">Gelées <span id="promoCountFrozen">0</span></button>
+            <button data-promo-page-filter="postponed">Reportées</button>
+          </div>
+          <div id="promotionCenterList" class="promotion-center-grid"></div>
+        </article>
+      </section>
+
       <section id="managementPage" class="page">
         <div class="management-hero">
           <div><p class="eyebrow">HIGH COMMAND</p><h2>Centre de commandement</h2><p>Effectifs, performance, alertes, promotions et audit administratif.</p></div>
@@ -202,7 +231,7 @@
         </div>
         <div class="dashboard-grid">
           <article class="panel"><div class="panel-head"><div><h2>Alertes intelligentes</h2><p>Éléments nécessitant une vérification</p></div></div><div id="managementAlerts" class="management-list"></div></article>
-          <article class="panel"><div class="panel-head"><div><h2>Centre des promotions</h2><p>Progression, éligibilité et validation finale High Command</p></div></div><div id="promotionStatusTabs" class="promotion-tabs"><button data-promo-filter="all" class="active">Tous</button><button data-promo-filter="eligible">Éligibles</button><button data-promo-filter="evaluation">Évaluation</button><button data-promo-filter="frozen">Gelées</button></div><div id="managementPromotions" class="management-list"></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Décisions de promotion</h2><p>Dossiers éligibles, en évaluation ou gelés nécessitant l’attention du High Command.</p></div></div><div id="promotionStatusTabs" class="promotion-tabs premium-tabs"><button data-promo-filter="eligible" class="active">Éligibles</button><button data-promo-filter="evaluation">Évaluation</button><button data-promo-filter="frozen">Gelées</button></div><div id="managementPromotions" class="management-list"></div></article>
         </div>
         <article class="panel panel-spaced"><div class="panel-head panel-head-responsive"><div><h2>Performance des policiers</h2><p>Score transparent sur 100 — aide à la décision uniquement</p></div><input id="managementSearch" class="search" type="search" placeholder="Rechercher un policier..."></div><div class="table-scroll"><table><thead><tr><th>Policier</th><th>Grade</th><th>Score</th><th>Service semaine</th><th>Discipline</th><th>Dernier service</th><th></th></tr></thead><tbody id="managementOfficerRows"></tbody></table></div></article>
         <article class="panel panel-spaced"><div class="panel-head"><div><h2>Couverture horaire — 30 jours</h2><p>Nombre de policiers distincts ayant commencé un service par heure</p></div></div><div id="coverageGrid" class="coverage-grid"></div></article>
