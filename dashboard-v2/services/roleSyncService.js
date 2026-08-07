@@ -1,8 +1,7 @@
 const {
   getAllOfficers,
   getOfficer,
-  updateOfficer,
-  resetOfficerAttendance,
+  deleteOfficersCompletely,
 } = require("../../database");
 
 const {
@@ -35,20 +34,17 @@ function hasPoliceRole(member) {
 }
 
 /**
- * Synchronise Discord vers la base :
+ * Synchronise Discord vers Neon :
  *
- * - membre avec rôle Police :
- *   création automatique s'il n'existe pas ;
+ * - membre avec rôle Police : création automatique s'il n'existe pas ;
+ * - membre sans rôle Police (ou ayant quitté le serveur) : suppression
+ *   complète de son dossier et de ses données HMPD.
  *
- * - membre sans rôle Police :
- *   points remis à zéro ;
- *   grade remis à Academy ;
- *   il disparaît du dashboard.
+ * Ce nettoyage évite d'accumuler des anciens policiers et garde les pages
+ * Policiers / Promotions / Présence rapides même après plusieurs mois.
  */
 async function syncPoliceRoles() {
-  if (running) {
-    return;
-  }
+  if (running) return;
 
   if (POLICE_ROLE_IDS.length === 0) {
     console.error("❌ ROLE_POLICE n'est pas configuré.");
@@ -61,109 +57,43 @@ async function syncPoliceRoles() {
     clearMemberCache();
 
     const members = await listGuildMembers();
-
-    const membersById = new Map(
-      members.map((member) => [
-        String(member.userId),
-        member,
-      ])
-    );
-
     const policeMembers = members.filter(
-      (member) =>
-        member.found &&
-        !member.bot &&
-        hasPoliceRole(member)
+      (member) => member.found && !member.bot && hasPoliceRole(member)
     );
 
     const existingOfficers = await getAllOfficers();
-
-    const existingIds = new Set(
-      existingOfficers.map((officer) =>
-        String(officer.user_id)
-      )
-    );
+    const existingIds = new Set(existingOfficers.map((officer) => String(officer.user_id)));
+    const policeIds = new Set(policeMembers.map((member) => String(member.userId)));
 
     let addedCount = 0;
-    let resetCount = 0;
-    let attendanceResetCount = 0;
-
-    /*
-    |--------------------------------------------------------------------------
-    | Ajouter automatiquement les membres ayant le rôle Police
-    |--------------------------------------------------------------------------
-    */
 
     for (const member of policeMembers) {
-      if (!existingIds.has(member.userId)) {
-        await getOfficer(member.userId);
-
-        existingIds.add(member.userId);
+      const userId = String(member.userId);
+      if (!existingIds.has(userId)) {
+        await getOfficer(userId);
+        existingIds.add(userId);
         addedCount += 1;
       }
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Remettre à zéro ceux qui n'ont plus le rôle Police
-    |--------------------------------------------------------------------------
-    */
+    const staleIds = existingOfficers
+      .map((officer) => String(officer.user_id))
+      .filter((userId) => !policeIds.has(userId));
 
-    for (const officer of existingOfficers) {
-      const userId = String(officer.user_id);
-      const discordMember = membersById.get(userId);
-
-      const stillHasPoliceRole =
-        discordMember &&
-        discordMember.found &&
-        !discordMember.bot &&
-        hasPoliceRole(discordMember);
-
-      if (!stillHasPoliceRole) {
-        const currentPoints = Number(officer.points) || 0;
-        const currentGrade = String(
-          officer.grade || "Academy"
-        );
-
-        if (
-          currentPoints !== 0 ||
-          currentGrade !== "Academy"
-        ) {
-          await updateOfficer(
-            userId,
-            0,
-            "Academy"
-          );
-
-          resetCount += 1;
-
-          console.log(
-            `🔄 Points remis à zéro pour ${userId} : rôle Police retiré.`
-          );
-        }
-
-        const attendanceResult =
-          await resetOfficerAttendance(userId);
-
-        if (attendanceResult.reset) {
-          attendanceResetCount += 1;
-
-          console.log(
-            `⏱️ Présence remise à zéro pour ${userId} : ` +
-            `${attendanceResult.deletedSessions} session(s) supprimée(s).`
-          );
-        }
-      }
+    let deletedCount = 0;
+    if (staleIds.length) {
+      const result = await deleteOfficersCompletely(staleIds);
+      deletedCount = result.deleted;
+      console.log(
+        `🧹 Nettoyage Police : ${deletedCount} ancien(s) dossier(s) supprimé(s) complètement de Neon.`
+      );
     }
 
     invalidateOfficerCache();
 
     console.log(
-      `✅ Synchronisation Police : ` +
-      `${policeMembers.length} actif(s), ` +
-      `${addedCount} ajouté(s), ` +
-      `${resetCount} point(s) remis à zéro, ` +
-      `${attendanceResetCount} présence(s) remise(s) à zéro.`
+      `✅ Synchronisation Police : ${policeMembers.length} actif(s), ` +
+      `${addedCount} ajouté(s), ${deletedCount} supprimé(s) de la base.`
     );
   } catch (error) {
     console.error(

@@ -4,7 +4,7 @@
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const dur=s=>`${Math.floor(Number(s||0)/3600)}h ${String(Math.floor(Number(s||0)%3600/60)).padStart(2,'0')}m`;
   const dt=v=>v?new Date(v).toLocaleString('fr-FR'):'Jamais';
-  let data=null,promotions=[],promoFilter='eligible',promoPageFilter='all',promoSearch='',selectedPromotionUser=null;
+  let data=null,promotions=[],promoFilter='eligible',promoPageFilter='all',promoSearch='',promoPage=1,promoPageSize=12,selectedPromotionUser=null;
 
   async function req(url,options={}){
     const init={cache:'no-store',...options};
@@ -56,7 +56,15 @@
     if(center){
       const q=promoSearch.toLowerCase();
       const list=promotions.filter(p=>(promoPageFilter==='all'||p.status===promoPageFilter)&&(!q||[p.display_name,p.user_id,p.grade,p.to_grade].some(v=>String(v||'').toLowerCase().includes(q))));
-      center.innerHTML=list.map(careerCard).join('')||'<div class="empty">Aucun dossier ne correspond à ce filtre.</div>';
+      const pages=Math.max(1,Math.ceil(list.length/promoPageSize));
+      promoPage=Math.min(Math.max(1,promoPage),pages);
+      const start=(promoPage-1)*promoPageSize;
+      const visible=list.slice(start,start+promoPageSize);
+      center.innerHTML=visible.map(careerCard).join('')||'<div class="empty">Aucun dossier ne correspond à ce filtre.</div>';
+      const info=$('#promotionPageInfo'),prev=$('#promotionPrevPage'),next=$('#promotionNextPage');
+      if(info)info.textContent=`Page ${promoPage} / ${pages} · ${list.length} dossier(s)`;
+      if(prev)prev.disabled=promoPage<=1;
+      if(next)next.disabled=promoPage>=pages;
     }
     window.updatePromotionBadges?.(promotions);
   }
@@ -141,8 +149,8 @@
       const promoNav=$('#promotionsNav');promoNav?.classList.remove('hidden');promoNav?.addEventListener('click',()=>{document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));promoNav.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('#promotionsPage')?.classList.add('active');$('#pageTitle').textContent='Promotions';$('#pageSubtitle').textContent='Dossiers de carrière et validation High Command';load()});
       $('#managementRefresh')?.addEventListener('click',load);$('#promotionsRefresh')?.addEventListener('click',load);$('#managementSearch')?.addEventListener('input',e=>render(e.target.value));$('#copyWeeklyReport')?.addEventListener('click',()=>navigator.clipboard?.writeText($('#weeklyReport').textContent));
       $('#promotionStatusTabs')?.addEventListener('click',e=>{const b=e.target.closest('[data-promo-filter]');if(!b)return;promoFilter=b.dataset.promoFilter;$$('#promotionStatusTabs button').forEach(x=>x.classList.toggle('active',x===b));renderPromotions()});
-      $('#promotionPageTabs')?.addEventListener('click',e=>{const b=e.target.closest('[data-promo-page-filter]');if(!b)return;promoPageFilter=b.dataset.promoPageFilter;$$('#promotionPageTabs button').forEach(x=>x.classList.toggle('active',x===b));renderPromotions()});
-      $('#promotionSearch')?.addEventListener('input',e=>{promoSearch=e.target.value.trim();renderPromotions()});
+      $('#promotionPageTabs')?.addEventListener('click',e=>{const b=e.target.closest('[data-promo-page-filter]');if(!b)return;promoPageFilter=b.dataset.promoPageFilter;promoPage=1;$$('#promotionPageTabs button').forEach(x=>x.classList.toggle('active',x===b));renderPromotions()});
+      $('#promotionSearch')?.addEventListener('input',e=>{promoSearch=e.target.value.trim();promoPage=1;renderPromotions()});$('#promotionPrevPage')?.addEventListener('click',()=>{promoPage=Math.max(1,promoPage-1);renderPromotions()});$('#promotionNextPage')?.addEventListener('click',()=>{promoPage+=1;renderPromotions()});
       document.addEventListener('click',e=>{const t=e.target.closest('[data-mg-profile]');if(t)timeline(t.dataset.mgProfile);const p=e.target.closest('[data-promotion-user]');if(p)openPromotion(p.dataset.promotionUser);if(e.target.closest('[data-close-promotion],#closePromotionButton'))closePromotion();if(e.target.closest('#saveRpEvaluation'))saveEvaluation();if(e.target.closest('#addSanctionButton'))addSanction();const ss=e.target.closest('[data-sanction-status]');if(ss)sanctionStatus(ss.dataset.sanctionId,ss.dataset.sanctionStatus);const sd=e.target.closest('[data-sanction-delete]');if(sd)deleteSanctionAction(sd.dataset.sanctionDelete);const a=e.target.closest('[data-promo-action]');if(a&&!a.disabled)promotionAction(a.dataset.promoAction)});
       document.addEventListener('change',e=>{if(e.target.matches('[data-criterion-key]'))updateCriterion(e.target)});
     }catch{}

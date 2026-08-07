@@ -65,6 +65,7 @@ const {
   getOfficerHistory,
   getLeaderboard,
   countOfficers,
+  deleteOfficerCompletely,
   closeDatabase,
 } = require("./database");
 
@@ -80,6 +81,10 @@ const PROMOTION_CHANNEL_ID = process.env.PROMOTION_CHANNEL_ID;
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
 
 const ROLE_HIGH_COMMAND = process.env.ROLE_HIGH_COMMAND;
+const POLICE_ROLE_IDS = String(process.env.ROLE_POLICE || "")
+  .split(",")
+  .map((id) => id.trim())
+  .filter(Boolean);
 
 /*
 |--------------------------------------------------------------------------
@@ -113,6 +118,7 @@ const requiredEnvironmentVariables = [
   "PROMOTION_CHANNEL_ID",
   "LOG_CHANNEL_ID",
   "ROLE_HIGH_COMMAND",
+  "ROLE_POLICE",
   "ROLE_ACADEMY",
   "ROLE_OFFICER",
   "ROLE_SENIOR_OFFICER",
@@ -775,6 +781,38 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
   ],
+});
+
+function memberHasPoliceRole(member) {
+  if (!member?.roles?.cache || POLICE_ROLE_IDS.length === 0) return false;
+  return POLICE_ROLE_IDS.some((roleId) => member.roles.cache.has(String(roleId)));
+}
+
+async function removeFormerPoliceOfficer(member, source) {
+  if (!member?.id || member.user?.bot) return;
+  try {
+    const result = await deleteOfficerCompletely(member.id);
+    if (result.deleted > 0) {
+      console.log(`🧹 ${member.user?.tag || member.id} supprimé complètement de Neon (${source}).`);
+    }
+  } catch (error) {
+    console.error(`❌ Nettoyage impossible pour ${member.id} (${source}) :`, error?.message || error);
+  }
+}
+
+client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+  const hadPolice = memberHasPoliceRole(oldMember);
+  const hasPolice = memberHasPoliceRole(newMember);
+  if (hadPolice && !hasPolice) {
+    await removeFormerPoliceOfficer(newMember, "rôle Police retiré");
+  }
+});
+
+client.on(Events.GuildMemberRemove, async (member) => {
+  // Suppression sans condition : si le membre n'était pas policier, DELETE ne
+  // trouve simplement aucun dossier. Cela couvre aussi les membres partiels
+  // dont Discord ne fournit plus le cache complet des rôles au départ.
+  await removeFormerPoliceOfficer(member, "membre parti du serveur");
 });
 
 /*

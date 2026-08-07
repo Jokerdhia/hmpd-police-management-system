@@ -166,9 +166,29 @@ async function approvePromotion({userId,reason,actorId}){
 }
 
 async function listPromotionCenter(actorId='SYSTEM'){
-  const { listOfficers }=require('./officerService'); const officers=await listOfficers();
-  const profiles=[]; for(const o of officers){const p=await getPromotionProfile(o.user_id,actorId);if(p.case)profiles.push({user_id:o.user_id,display_name:o.display_name,avatar_url:o.avatar_url,grade:o.grade,points:o.points,to_grade:p.case.to_grade,status:p.case.status,progress:p.progress,evaluation:p.evaluation});}
-  return profiles;
+  const { listOfficers }=require('./officerService');
+  const officers=await listOfficers();
+  const profiles=[];
+
+  // Traitement parallèle limité : assez rapide pour 50-150 policiers sans
+  // saturer le pool Neon (10 connexions par défaut).
+  const concurrency=Math.min(6,Math.max(1,officers.length));
+  let cursor=0;
+  const workers=Array.from({length:concurrency},async()=>{
+    while(true){
+      const index=cursor++;
+      if(index>=officers.length)break;
+      const o=officers[index];
+      const p=await getPromotionProfile(o.user_id,actorId);
+      if(p.case)profiles[index]={
+        user_id:o.user_id,display_name:o.display_name,avatar_url:o.avatar_url,
+        grade:o.grade,points:o.points,to_grade:p.case.to_grade,status:p.case.status,
+        progress:p.progress,evaluation:p.evaluation
+      };
+    }
+  });
+  await Promise.all(workers);
+  return profiles.filter(Boolean);
 }
 
 module.exports={schemaReady,getPromotionProfile,setCriterion,addRpEvaluation,setCaseStatus,approvePromotion,listPromotionCenter};

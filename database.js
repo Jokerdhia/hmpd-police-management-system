@@ -627,6 +627,70 @@ async function removeAttendanceTime({ userId, seconds, reason, moderatorId }) {
   }
 }
 
+
+async function deleteOfficersCompletely(userIds) {
+  await ready;
+
+  const ids = [...new Set((Array.isArray(userIds) ? userIds : [userIds])
+    .map((value) => String(value || "").trim())
+    .filter((value) => /^\d{16,22}$/.test(value)))];
+
+  if (!ids.length) {
+    return { deleted: 0, userIds: [] };
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    // Tables sans FK vers officers : nettoyage explicite pour ne laisser
+    // aucune donnée personnelle orpheline dans Neon.
+    const cleanup = [
+      "DELETE FROM promotion_cases WHERE user_id = ANY($1::text[])",
+      "DELETE FROM rp_evaluations WHERE user_id = ANY($1::text[])",
+      "DELETE FROM grade_history WHERE user_id = ANY($1::text[])",
+      "DELETE FROM officer_notes WHERE user_id = ANY($1::text[])",
+      "DELETE FROM officer_sanctions WHERE user_id = ANY($1::text[])",
+      "DELETE FROM attendance_adjustments WHERE user_id = ANY($1::text[])",
+      "DELETE FROM attendance_sessions WHERE user_id = ANY($1::text[])",
+      "DELETE FROM admin_audit_log WHERE target_id = ANY($1::text[])",
+    ];
+
+    for (const sql of cleanup) {
+      // Les tables Dashboard/Promotion sont créées au démarrage de la V5.
+      // Si une ancienne base n'en possède pas encore une, on ignore uniquement
+      // l'erreur table inexistante pour permettre la migration sans blocage.
+      try {
+        await client.query(sql, [ids]);
+      } catch (error) {
+        if (error?.code !== "42P01") throw error;
+      }
+    }
+
+    // points_history est supprimé automatiquement grâce à ON DELETE CASCADE.
+    const result = await client.query(
+      "DELETE FROM officers WHERE user_id = ANY($1::text[]) RETURNING user_id",
+      [ids]
+    );
+
+    await client.query("COMMIT");
+    return {
+      deleted: result.rowCount || 0,
+      userIds: result.rows.map((row) => String(row.user_id)),
+    };
+  } catch (error) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function deleteOfficerCompletely(userId) {
+  const safeUserId = normalizeUserId(userId);
+  return deleteOfficersCompletely([safeUserId]);
+}
+
 async function setBotSetting(key, value) {
   await ready;
   const safeKey = String(key || "").trim();
@@ -663,6 +727,8 @@ module.exports = {
   getAttendanceTotals,
   resetOfficerAttendance,
   removeAttendanceTime,
+  deleteOfficerCompletely,
+  deleteOfficersCompletely,
   setBotSetting,
   getBotSetting,
   closeDatabase

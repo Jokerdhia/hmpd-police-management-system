@@ -1,0 +1,16 @@
+HMPD Police Management System — V5.1
+
+CORRECTIONS PRINCIPALES
+- Suppression COMPLETE d'un policier de Neon dès qu'il perd ROLE_POLICE.
+- Suppression également lorsqu'il quitte le serveur Discord.
+- Nettoyage : profil, points/historique, présence, ajustements, notes, sanctions,
+  dossiers/critères de promotion, RP Quality, historique de grades et audits ciblés.
+- Synchronisation de sécurité périodique : supprime en lot les anciens dossiers restants.
+- Si le rôle Police est rendu plus tard, le policier repart avec un dossier neuf.
+- Centre Promotions optimisé avec traitement parallèle limité (Neon protégé).
+- Pagination des dossiers de carrière (12 par page) pour garder une interface rapide.
+- Les points restent uniquement un indicateur d'activité et ne changent jamais le grade.
+
+IMPORTANT
+Le retrait du rôle Police est destructif pour le dossier HMPD. Les anciennes données
+ne sont pas restaurées automatiquement si le rôle est remis ensuite.
