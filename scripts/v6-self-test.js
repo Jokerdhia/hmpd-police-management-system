@@ -3,8 +3,8 @@ const root=path.resolve(__dirname,'..'); const failures=[];
 function read(rel){return fs.readFileSync(path.join(root,rel),'utf8')}
 function assert(cond,msg){if(!cond)failures.push(msg)}
 const pkg=require(path.join(root,'package.json'));
-assert(pkg.version==='6.0.0',`package version=${pkg.version}`);
-assert(read('dashboard-v2/server.js').includes('version: "6.0.0"'),'health version non synchronisée');
+assert(pkg.version==='6.0.1',`package version=${pkg.version}`);
+assert(read('dashboard-v2/server.js').includes('version: "6.0.1"'),'health version non synchronisée');
 
 const grades=require(path.join(root,'dashboard-v2/config/grades.js'));
 assert(grades.GRADES.length===12,'la hiérarchie doit contenir 12 grades');

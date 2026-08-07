@@ -282,7 +282,7 @@ app.get(
     return response.status(healthy ? 200 : 503).json({
       success: healthy,
       status: healthy ? "online" : "degraded",
-      version: "6.0.0",
+      version: "6.0.1",
       dashboard: "HMPD V6 Command Center",
       oauthEnabled,
       database,

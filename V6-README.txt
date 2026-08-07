@@ -43,3 +43,10 @@ PERFORMANCE / QUALITÉ
 
 IMPORTANT
 La vérification syntaxique et les self-tests sont passés. Les tests réels Discord + Neon nécessitent tes vraies variables Render et ton serveur Discord.
+
+
+V6.0.1 HOTFIX PRESENCE
+- Parsing API robuste: aucune tentative de parser une page HTML comme JSON.
+- Retry automatique unique sur réponse Render/proxy HTML ou 502/503/504.
+- Message utilisateur propre si le serveur répond temporairement en HTML.
+- Même protection appliquée aux actions Présence (start/pause/stop, correction, pause/fin forcée).
