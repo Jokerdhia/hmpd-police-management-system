@@ -1232,7 +1232,7 @@ async function getTargetHierarchyAccess(request, targetUserId) {
     targetGradeIndex,
     isSelf,
     targetIsHigher,
-    canModifyTarget: !targetIsHigher,
+    canModifyTarget: !isSelf && !targetIsHigher,
   };
 }
 
@@ -1244,9 +1244,12 @@ function requireTargetNotHigher(paramName = 'userId') {
       request.targetHierarchyAccess = access;
 
       if (!access.canModifyTarget) {
+        const message = access.isSelf
+          ? "Auto-modification interdite : tu ne peux pas modifier ton propre dossier. Un autre membre autorisé du High Grade / High Command doit effectuer cette action."
+          : `Action interdite : ${access.targetGrade || 'ce grade'} est supérieur à ton grade ${access.actorGrade || 'non défini'}.`;
         return response.status(403).json({
           success: false,
-          message: `Action interdite : ${access.targetGrade || 'ce grade'} est supérieur à ton grade ${access.actorGrade || 'non défini'}.`,
+          message,
           hierarchy: access,
         });
       }
