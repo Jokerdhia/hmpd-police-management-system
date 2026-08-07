@@ -227,13 +227,19 @@ async function approvePromotion({userId,reason,actorId}){
   await setMemberGradeRole(userId,target.roleId);
   const client=await pool.connect();
   try{await client.query('BEGIN');
-    await client.query(`UPDATE officers SET grade=$2,rank_started_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE user_id=$1`,[userId,p.case.to_grade]);
+    const current=(await client.query(`SELECT points FROM officers WHERE user_id=$1 FOR UPDATE`,[userId])).rows[0]||{};
+    const oldPoints=Number(current.points||0);
+    const referencePoints=Number(target.points||0);
+    await client.query(`UPDATE officers SET grade=$2,points=$3,rank_started_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE user_id=$1`,[userId,p.case.to_grade,referencePoints]);
+    if(oldPoints!==referencePoints){
+      await client.query(`INSERT INTO points_history(user_id,action,amount,old_points,new_points,reason,moderator_id) VALUES($1,$2,$3,$4,$5,$6,$7)`,[userId,referencePoints>oldPoints?'add':'remove',Math.abs(referencePoints-oldPoints),oldPoints,referencePoints,`Synchronisation des points de référence après promotion ${p.case.from_grade} → ${p.case.to_grade}`,String(actorId)]);
+    }
     await client.query(`UPDATE promotion_cases SET status='approved',decision_reason=$2,decided_by=$3,decided_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=$1`,[p.case.id,clean(reason,2000)||null,String(actorId)]);
     await client.query(`INSERT INTO grade_history(user_id,from_grade,to_grade,action,reason,actor_id) VALUES($1,$2,$3,'promotion',$4,$5)`,[userId,p.case.from_grade,p.case.to_grade,clean(reason,2000)||null,String(actorId)]);
     await client.query('COMMIT');
   }catch(e){await client.query('ROLLBACK').catch(()=>{});throw e}finally{client.release()}
   invalidateOfficerCache();
-  if(PROMOTION_CHANNEL_ID) await sendChannelMessage(PROMOTION_CHANNEL_ID,{content:`🎉 Félicitations <@${userId}> !`,embeds:[{color:0xf1c40f,title:'🎖️ PROMOTION OFFICIELLE',description:`👤 **Agent :** <@${userId}>\n⬆️ **Ancien grade :** ${p.case.from_grade}\n🏅 **Nouveau grade :** ${p.case.to_grade}\n⭐ **Points d’activité :** ${p.officer.points}\n\n*La promotion a été validée par le High Command.*`,timestamp:new Date().toISOString()}],allowed_mentions:{users:[userId],parse:[]}}).catch(()=>{});
+  if(PROMOTION_CHANNEL_ID) await sendChannelMessage(PROMOTION_CHANNEL_ID,{content:`🎉 Félicitations <@${userId}> !`,embeds:[{color:0xf1c40f,title:'🎖️ PROMOTION OFFICIELLE',description:`👤 **Agent :** <@${userId}>\n⬆️ **Ancien grade :** ${p.case.from_grade}\n🏅 **Nouveau grade :** ${p.case.to_grade}\n⭐ **Points synchronisés au grade :** ${Number(target.points||0)}\n\n*La promotion a été validée par le High Command.*`,timestamp:new Date().toISOString()}],allowed_mentions:{users:[userId],parse:[]}}).catch(()=>{});
   await audit({actorId,action:'promotion.approved',targetId:userId,details:{from:p.case.from_grade,to:p.case.to_grade,reason:clean(reason,2000)}}).catch(()=>{});
   return getPromotionProfile(userId,actorId);
 }

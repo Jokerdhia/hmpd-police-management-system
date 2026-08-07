@@ -62,6 +62,7 @@ const {
   getOfficer,
   updateOfficer,
   changeOfficerPoints,
+  addPointsHistory,
   getOfficerHistory,
   getLeaderboard,
   countOfficers,
@@ -788,6 +789,83 @@ function memberHasPoliceRole(member) {
   return POLICE_ROLE_IDS.some((roleId) => member.roles.cache.has(String(roleId)));
 }
 
+function getDiscordGradeFromMember(member) {
+  if (!member?.roles?.cache) return null;
+  // On parcourt du plus haut au plus bas pour éviter qu'un ancien rôle de grade
+  // encore présent pendant quelques millisecondes prenne le dessus.
+  return [...GRADES].reverse().find((grade) =>
+    grade.roleId && member.roles.cache.has(String(grade.roleId))
+  ) || null;
+}
+
+async function synchronizeDiscordGradePoints(member, source = "modification Discord") {
+  if (!member?.id || member.user?.bot || !memberHasPoliceRole(member)) return null;
+
+  const discordGrade = getDiscordGradeFromMember(member);
+  if (!discordGrade) return null;
+
+  const officer = await getOfficer(member.id);
+  const oldGrade = String(officer?.grade || "Academy");
+  const oldPoints = Number(officer?.points || 0);
+  const newPoints = Number(discordGrade.points || 0);
+
+  // Important : on ne resynchronise que lorsqu'il y a réellement un changement
+  // de grade Discord. Les points peuvent ensuite évoluer librement comme score
+  // d'activité sans être écrasés toutes les 30 secondes.
+  if (oldGrade === discordGrade.name) return null;
+
+  // Le changement manuel de grade Discord est la source de vérité :
+  // on synchronise le grade + les points de référence et on redémarre
+  // l'ancienneté du nouveau grade pour le calcul des 7 journées validées.
+  await updateOfficer(member.id, newPoints, discordGrade.name);
+  try {
+    const { pool } = require("./database");
+    await pool.query(
+      `UPDATE officers SET rank_started_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP WHERE user_id=$1`,
+      [member.id]
+    );
+    await pool.query(
+      `UPDATE promotion_cases
+       SET status='rejected', decision_reason=$2, decided_by='SYSTEM', decided_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+       WHERE user_id=$1 AND from_grade<>$3 AND status IN ('progress','eligible','evaluation','frozen')`,
+      [member.id, `Dossier clôturé automatiquement : grade Discord changé vers ${discordGrade.name}`, discordGrade.name]
+    ).catch((error) => { if (error?.code !== "42P01") throw error; });
+  } catch (error) {
+    if (error?.code !== "42703" && error?.code !== "42P01") {
+      console.warn("⚠️ Mise à jour ancienneté/dossier promotion impossible :", error?.message || error);
+    }
+  }
+
+  if (oldPoints !== newPoints) {
+    await addPointsHistory({
+      userId: member.id,
+      action: newPoints > oldPoints ? "add" : "remove",
+      amount: Math.abs(newPoints - oldPoints),
+      oldPoints,
+      newPoints,
+      reason: `Synchronisation automatique du grade Discord : ${oldGrade} → ${discordGrade.name}`,
+      moderatorId: "SYSTEM",
+    }).catch((error) => console.warn("⚠️ Historique sync grade non enregistré :", error?.message || error));
+  }
+
+  // Historique carrière (si la table Promotions est déjà initialisée).
+  try {
+    const { pool } = require("./database");
+    await pool.query(
+      `INSERT INTO grade_history(user_id,from_grade,to_grade,action,reason,actor_id)
+       VALUES($1,$2,$3,'discord_sync',$4,'SYSTEM')`,
+      [member.id, oldGrade, discordGrade.name, `Grade modifié directement sur Discord (${source})`]
+    );
+  } catch (error) {
+    if (error?.code !== "42P01") {
+      console.warn("⚠️ Historique carrière sync Discord non enregistré :", error?.message || error);
+    }
+  }
+
+  console.log(`🔄 Grade Discord synchronisé : ${member.user?.tag || member.id} | ${oldGrade} (${oldPoints}) → ${discordGrade.name} (${newPoints} pts)`);
+  return { oldGrade, newGrade: discordGrade.name, oldPoints, newPoints };
+}
+
 async function removeFormerPoliceOfficer(member, source) {
   if (!member?.id || member.user?.bot) return;
   try {
@@ -805,6 +883,19 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
   const hasPolice = memberHasPoliceRole(newMember);
   if (hadPolice && !hasPolice) {
     await removeFormerPoliceOfficer(newMember, "rôle Police retiré");
+    return;
+  }
+
+  if (hasPolice) {
+    const oldGrade = getDiscordGradeFromMember(oldMember)?.name || null;
+    const newGrade = getDiscordGradeFromMember(newMember)?.name || null;
+    if (oldGrade !== newGrade && newGrade) {
+      try {
+        await synchronizeDiscordGradePoints(newMember, "rôle de grade modifié");
+      } catch (error) {
+        console.error(`❌ Synchronisation grade/points impossible pour ${newMember.id} :`, error?.message || error);
+      }
+    }
   }
 });
 
@@ -997,13 +1088,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
         interaction.user;
 
       const officer = await getOfficer(user.id);
-      const currentGrade = getGradeFromPoints(
-        Number(officer.points)
-      );
-
-      const nextGrade = getNextGrade(
-        Number(officer.points)
-      );
+      const member = await interaction.guild.members.fetch(user.id).catch(() => null);
+      const currentGrade =
+        getDiscordGradeFromMember(member) ||
+        GRADES.find((grade) => grade.name === String(officer.grade || "")) ||
+        GRADES[0];
+      const currentGradeIndex = GRADES.findIndex((grade) => grade.name === currentGrade.name);
+      const nextGrade = currentGradeIndex >= 0 ? (GRADES[currentGradeIndex + 1] || null) : null;
 
       const embed = new EmbedBuilder()
         .setColor(0x3498db)
@@ -1037,15 +1128,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
             inline: true,
           },
           {
-            name: "🎯 Points nécessaires",
+            name: "🎯 Système de promotion",
             value: nextGrade
-              ? `${nextGrade.points - officer.points}`
-              : "0",
+              ? "Dossier carrière + validation High Command"
+              : "Grade maximum",
             inline: true,
           }
         )
         .setFooter({
-          text: "HMPD • Police Points System",
+          text: "HMPD • Points = activité • Grade = Discord / High Command",
         })
         .setTimestamp();
 

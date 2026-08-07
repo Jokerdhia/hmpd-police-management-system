@@ -1,15 +1,19 @@
 const { pool,
   getAllOfficers,
   getOfficer,
+  updateOfficer,
+  addPointsHistory,
   deleteOfficersCompletely,
 } = require("../../database");
 
 const {
   listGuildMembers,
+  getDiscordMember,
   clearMemberCache,
 } = require("./discordService");
 
 const { invalidateOfficerCache } = require("./officerService");
+const { GRADES, getDiscordGradeFromRoles } = require("../config/grades");
 
 const POLICE_ROLE_IDS = String(process.env.ROLE_POLICE || "")
   .split(",")
@@ -76,19 +80,76 @@ async function syncPoliceRoles() {
     const policeIds = new Set(policeMembers.map((member) => String(member.userId)));
 
     let addedCount = 0;
+    let gradeSyncedCount = 0;
+    const officerById = new Map(existingOfficers.map((officer) => [String(officer.user_id), officer]));
 
     for (const member of policeMembers) {
       const userId = String(member.userId);
+      let officer = officerById.get(userId);
       if (!existingIds.has(userId)) {
-        await getOfficer(userId);
+        officer = await getOfficer(userId);
         existingIds.add(userId);
+        officerById.set(userId, officer);
         addedCount += 1;
+      }
+
+      // Filet de sécurité : si un événement Discord a été manqué pendant un
+      // redémarrage, le prochain cycle remet le grade + les points de référence.
+      const discordGradeName = getDiscordGradeFromRoles(getMemberRoles(member));
+      if (discordGradeName && String(officer?.grade || "") !== discordGradeName) {
+        const grade = GRADES.find((item) => item.name === discordGradeName);
+        if (grade) {
+          const oldGrade = String(officer?.grade || "Academy");
+          const oldPoints = Number(officer?.points || 0);
+          const newPoints = Number(grade.points || 0);
+          await updateOfficer(userId, newPoints, grade.name);
+          // Un changement de grade redémarre l'ancienneté de carrière.
+          await pool.query(`UPDATE officers SET rank_started_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE user_id=$1`,[userId]).catch(()=>{});
+          await pool.query(`UPDATE promotion_cases SET status='rejected',decision_reason=$2,decided_by='SYSTEM',decided_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE user_id=$1 AND from_grade<>$3 AND status IN ('progress','eligible','evaluation','frozen')`,[userId,`Dossier clôturé automatiquement : grade Discord changé vers ${grade.name}`,grade.name]).catch(()=>{});
+          if (oldPoints !== newPoints) {
+            await addPointsHistory({
+              userId,
+              action: newPoints > oldPoints ? "add" : "remove",
+              amount: Math.abs(newPoints - oldPoints),
+              oldPoints,
+              newPoints,
+              reason: `Synchronisation automatique du grade Discord : ${oldGrade} → ${grade.name}`,
+              moderatorId: "SYSTEM",
+            }).catch(() => {});
+          }
+          await pool.query(
+            `INSERT INTO grade_history(user_id,from_grade,to_grade,action,reason,actor_id) VALUES($1,$2,$3,'discord_sync',$4,'SYSTEM')`,
+            [userId, oldGrade, grade.name, 'Synchronisation périodique Discord → Neon']
+          ).catch(() => {});
+          officerById.set(userId, { ...officer, points: newPoints, grade: grade.name });
+          gradeSyncedCount += 1;
+        }
       }
     }
 
-    const staleIds = existingOfficers
+    const staleCandidates = existingOfficers
       .map((officer) => String(officer.user_id))
       .filter((userId) => !policeIds.has(userId));
+
+    // Sécurité anti-effacement massif : chaque dossier absent de la liste est
+    // confirmé individuellement auprès de Discord avant suppression définitive.
+    // Une erreur REST temporaire ne doit jamais vider Neon.
+    const staleIds = [];
+    const verifyConcurrency = Math.min(6, Math.max(1, staleCandidates.length));
+    let verifyCursor = 0;
+    await Promise.all(Array.from({ length: verifyConcurrency }, async () => {
+      while (true) {
+        const i = verifyCursor++;
+        if (i >= staleCandidates.length) break;
+        const userId = staleCandidates[i];
+        try {
+          const member = await getDiscordMember(userId, true);
+          if (!member?.found || !hasPoliceRole(member)) staleIds.push(userId);
+        } catch (error) {
+          console.warn(`⚠️ Suppression différée pour ${userId} : vérification Discord impossible (${error?.message || error}).`);
+        }
+      }
+    }));
 
     let deletedCount = 0;
     if (staleIds.length) {
@@ -103,7 +164,7 @@ async function syncPoliceRoles() {
 
     console.log(
       `✅ Synchronisation Police : ${policeMembers.length} actif(s), ` +
-      `${addedCount} ajouté(s), ${deletedCount} supprimé(s) de la base.`
+      `${addedCount} ajouté(s), ${gradeSyncedCount} grade(s)/points synchronisé(s), ${deletedCount} supprimé(s) de la base.`
     );
   } catch (error) {
     console.error(

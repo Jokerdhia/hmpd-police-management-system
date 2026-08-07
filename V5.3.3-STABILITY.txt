@@ -1,0 +1,10 @@
+HMPD V5.3.3 — Stability & Data Integrity
+
+- Grade Discord = source de vérité.
+- /points affiche le vrai grade Discord et non un grade déduit des points.
+- Tout changement manuel de grade remet les points au montant de référence du grade.
+- Le compteur d'ancienneté/7 jours redémarre au changement de grade.
+- Les anciens dossiers de promotion incompatibles sont clôturés.
+- Une promotion approuvée synchronise grade + points dans la même transaction Neon.
+- Protection anti-effacement massif : un ancien dossier n'est supprimé qu'après confirmation Discord individuelle.
+- Le retrait du rôle Police continue de supprimer complètement le dossier.
