@@ -28,10 +28,9 @@ const {
 const ATTENDANCE_CHANNEL_ID = String(process.env.ATTENDANCE_CHANNEL_ID || "").trim();
 const ATTENDANCE_LOG_CHANNEL_ID = String(process.env.ATTENDANCE_LOG_CHANNEL_ID || "").trim();
 const ATTENDANCE_REMARK_CHANNEL_ID = String(process.env.ATTENDANCE_REMARK_CHANNEL_ID || "").trim();
-const ROLE_POLICE = String(process.env.ROLE_POLICE || "").trim();
-const ROLE_HIGH_COMMAND = String(
-  process.env.ROLE_HIGH_COMMAND || ""
-).trim();
+const ROLE_POLICE_IDS = String(process.env.ROLE_POLICE || "").split(",").map(x=>x.trim()).filter(Boolean);
+const ROLE_HIGH_COMMAND = String(process.env.ROLE_HIGH_GRADE || process.env.ROLE_HIGH_COMMAND || "").trim();
+const { GRADES } = require("../dashboard-v2/config/grades");
 
 const PANEL_SETTING_KEY = "attendance_panel_message_id";
 
@@ -61,13 +60,13 @@ function unix(dateValue) {
 }
 
 function memberIsPolice(member) {
-  return Boolean(ROLE_POLICE && member?.roles?.cache?.has(ROLE_POLICE));
+  return Boolean(member?.roles?.cache && ROLE_POLICE_IDS.some(id=>member.roles.cache.has(id)));
 }
 
 function memberIsHighCommand(member, interaction) {
   const hasRole = Boolean(
-    ROLE_HIGH_COMMAND &&
-    member?.roles?.cache?.has(ROLE_HIGH_COMMAND)
+    (ROLE_HIGH_COMMAND && member?.roles?.cache?.has(ROLE_HIGH_COMMAND)) ||
+    member?.roles?.cache?.some?.((role)=>/^(high[ _-]?(grade|command))$/i.test(String(role.name||'').trim()))
   );
 
   const isAdministrator = Boolean(
@@ -77,6 +76,19 @@ function memberIsHighCommand(member, interaction) {
   );
 
   return hasRole || isAdministrator;
+}
+
+function memberGradeIndex(member){
+  if(!member?.roles?.cache)return -1;
+  for(let i=GRADES.length-1;i>=0;i--){const id=String(GRADES[i].roleId||'').trim();if(id&&member.roles.cache.has(id))return i;}
+  return -1;
+}
+async function assertAdministrativeTarget(interaction,targetUserId){
+  if(String(interaction.user?.id||'')===String(targetUserId))throw new Error('🚫 Auto-modification interdite : un autre High Grade doit effectuer cette action.');
+  const target=await interaction.guild.members.fetch(String(targetUserId));
+  const actorIndex=memberGradeIndex(interaction.member),targetIndex=memberGradeIndex(target);
+  if(targetIndex>=0&&(actorIndex<0||targetIndex>actorIndex))throw new Error(`🔒 Action interdite : ${GRADES[targetIndex].name} est supérieur à ton grade ${actorIndex>=0?GRADES[actorIndex].name:'non défini'}.`);
+  return target;
 }
 
 async function fetchTextChannel(client, channelId) {
@@ -879,6 +891,8 @@ async function handleAttendanceModalSubmit(interaction, client) {
     await interaction.editReply("❌ Cette action est réservée au High Command.");
     return true;
   }
+  try { await assertAdministrativeTarget(interaction,targetUserId); }
+  catch(error){ await interaction.editReply(error.message); return true; }
 
   const remark = String(interaction.fields.getTextInputValue("remark") || "").trim();
   if (!remark || remark.length > 500) {
@@ -1032,7 +1046,9 @@ async function handleAttendanceButton(interaction, client) {
       return true;
     }
 
-    // Action directe depuis Discord : aucun formulaire ni remarque à remplir.
+    // Action directe depuis Discord : mêmes protections hiérarchiques que le MDT.
+    try { await assertAdministrativeTarget(interaction,targetUserId); }
+    catch(error){ await interaction.editReply(error.message); return true; }
     const isPause = action === "force-pause-open";
     const remark = isPause
       ? "Pause forcée directement depuis Discord par le High Command."

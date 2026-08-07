@@ -1,20 +1,16 @@
-INSTALLATION HMPD DASHBOARD V2
+HMPD MDT V6 — COMMAND CENTER
 
-1. Arrête le Dashboard avec Ctrl + C.
-2. Dans PowerShell :
-   cd E:\hmpd-points-bot
-   Rename-Item dashboard-v2 dashboard-v2-backup
-3. Décompresse le ZIP.
-4. Copie le dossier hmpd-dashboard-v2 dans E:\hmpd-points-bot\
-5. Renomme-le dashboard-v2.
-6. Vérifie dans .env :
-   GUILD_ID=...
-   DASHBOARD_PORT_V2=3001
-   DASHBOARD_MODERATOR_ID=TON_ID_DISCORD
-7. Installe si nécessaire :
-   npm install express helmet express-rate-limit
-8. Lance :
-   node dashboard-v2\server.js
-9. Ouvre : http://localhost:3001
+Dashboard officiel HMPD : présence, activité, dossiers policiers, promotions, RP Quality, sanctions, High Command et audit.
 
-Le fichier .env et le token Discord ne sont pas inclus.
+Principes V6 :
+- Discord est la source de vérité pour le grade.
+- Les points mesurent uniquement l'activité.
+- Aucune promotion automatique par points.
+- High Grade a accès aux fonctions administratives.
+- Auto-modification interdite.
+- Un grade supérieur est toujours en lecture seule.
+- 1 journée promotion = minimum 2h de service réel, cumulatif depuis la prise du grade.
+- Retrait du rôle Police = suppression du dossier Neon.
+- Les changements de grade gérés par le MDT ne sont plus retraités comme des changements manuels Discord.
+
+Utilise `npm run verify` avant chaque déploiement.

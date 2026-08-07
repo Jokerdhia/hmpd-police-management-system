@@ -36,8 +36,8 @@ async function addNote({userId,content,authorId}){await ready;const r=await pool
 async function deleteNote(id){await ready;const r=await pool.query("DELETE FROM officer_notes WHERE id=$1",[parseInt(id,10)]);return{deleted:r.rowCount>0}}
 async function listSanctions(userId,limit=50){await ready;return (await pool.query("SELECT id,user_id,sanction_type,reason,author_id,expires_at,status,created_at FROM officer_sanctions WHERE user_id=$1 ORDER BY id DESC LIMIT $2",[txt(userId,"userId",64),lim(limit)])).rows}
 async function addSanction({userId,type,reason,authorId,expiresAt}){await ready;const r=await pool.query("INSERT INTO officer_sanctions(user_id,sanction_type,reason,author_id,expires_at) VALUES($1,$2,$3,$4,$5) RETURNING id",[txt(userId,"userId",64),txt(type,"type",100),txt(reason,"reason",4000),txt(authorId,"authorId",64),expiresAt||null]);return{id:Number(r.rows[0].id)}}
-async function updateSanctionStatus(id,status){await ready;const s=String(status||"").toLowerCase();if(!["active","expired","cancelled"].includes(s))throw new Error("Statut invalide.");const r=await pool.query("UPDATE officer_sanctions SET status=$1 WHERE id=$2",[s,parseInt(id,10)]);return{updated:r.rowCount>0}}
-async function deleteSanction(id){await ready;const r=await pool.query("DELETE FROM officer_sanctions WHERE id=$1",[parseInt(id,10)]);return{deleted:r.rowCount>0}}
+async function updateSanctionStatusForUser(userId,id,status){await ready;const s=String(status||"").toLowerCase();if(!["active","expired","cancelled"].includes(s))throw new Error("Statut invalide.");const r=await pool.query("UPDATE officer_sanctions SET status=$1 WHERE id=$2 AND user_id=$3",[s,parseInt(id,10),txt(userId,"userId",64)]);return{updated:r.rowCount>0}}
+async function deleteSanctionForUser(userId,id){await ready;const r=await pool.query("DELETE FROM officer_sanctions WHERE id=$1 AND user_id=$2",[parseInt(id,10),txt(userId,"userId",64)]);return{deleted:r.rowCount>0}}
 async function listActivity(limit=50){await ready;return (await pool.query("SELECT id,user_id,action,amount,old_points,new_points,reason,moderator_id,created_at FROM points_history ORDER BY id DESC LIMIT $1",[lim(limit)])).rows}
 async function listOfficerActivity(userId,limit=50){await ready;return (await pool.query("SELECT id,user_id,action,amount,old_points,new_points,reason,moderator_id,created_at FROM points_history WHERE user_id=$1 ORDER BY id DESC LIMIT $2",[txt(userId,"userId",64),lim(limit)])).rows}
 async function getAttendanceSessions(limit=100){
@@ -66,15 +66,29 @@ async function getAttendanceTotalsDashboard(period='week',limit=100){
   const allowed={day:'day',week:'week',month:'month'};
   const unit=allowed[period]||'week';
   const rows=(await pool.query(`
-    SELECT user_id,
-      SUM(CASE WHEN ended_at IS NULL THEN GREATEST(0,
-        FLOOR(EXTRACT(EPOCH FROM (COALESCE(paused_at,CURRENT_TIMESTAMP)-started_at)))::int
-        - COALESCE(paused_seconds,0))
-      ELSE COALESCE(duration_seconds,0) END)::bigint AS total_seconds,
+    WITH bounds AS (
+      SELECT (date_trunc($1, CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels') AT TIME ZONE 'Europe/Brussels') AS starts_at,
+             CURRENT_TIMESTAMP AS ends_at
+    ), sessions AS (
+      SELECT s.*,
+        CASE WHEN s.ended_at IS NULL THEN COALESCE(s.paused_at,CURRENT_TIMESTAMP) ELSE s.ended_at END AS effective_end,
+        GREATEST(0,CASE WHEN s.ended_at IS NULL THEN
+          FLOOR(EXTRACT(EPOCH FROM (COALESCE(s.paused_at,CURRENT_TIMESTAMP)-s.started_at)))::bigint-COALESCE(s.paused_seconds,0)
+          ELSE COALESCE(s.duration_seconds,0)::bigint END) AS active_seconds,
+        GREATEST(1,FLOOR(EXTRACT(EPOCH FROM ((CASE WHEN s.ended_at IS NULL THEN COALESCE(s.paused_at,CURRENT_TIMESTAMP) ELSE s.ended_at END)-s.started_at)))::bigint) AS wall_seconds
+      FROM attendance_sessions s,bounds b
+      WHERE (CASE WHEN s.ended_at IS NULL THEN COALESCE(s.paused_at,CURRENT_TIMESTAMP) ELSE s.ended_at END)>b.starts_at
+        AND s.started_at<b.ends_at
+    )
+    SELECT s.user_id,
+      ROUND(SUM(
+        GREATEST(0,EXTRACT(EPOCH FROM (LEAST(s.effective_end,b.ends_at)-GREATEST(s.started_at,b.starts_at))))
+        * LEAST(1.0,s.active_seconds::numeric/s.wall_seconds::numeric)
+      ))::bigint AS total_seconds,
       COUNT(*)::int AS sessions
-    FROM attendance_sessions
-    WHERE started_at >= date_trunc($1,CURRENT_TIMESTAMP)
-    GROUP BY user_id
+    FROM sessions s CROSS JOIN bounds b
+    WHERE LEAST(s.effective_end,b.ends_at)>GREATEST(s.started_at,b.starts_at)
+    GROUP BY s.user_id
     ORDER BY total_seconds DESC
     LIMIT $2`,[unit,lim(limit,100,500)])).rows;
   return rows.map(r=>({...r,total_seconds:Number(r.total_seconds||0),sessions:Number(r.sessions||0)}));
@@ -84,19 +98,32 @@ async function getAttendanceDaily(days=7){
   const safe=Math.min(Math.max(parseInt(days,10)||7,1),31);
   const rows=(await pool.query(`
     WITH dates AS (
-      SELECT generate_series(
-        date_trunc('day',CURRENT_TIMESTAMP)-($1::int-1)*interval '1 day',
-        date_trunc('day',CURRENT_TIMESTAMP),interval '1 day') AS day
+      SELECT local_day,
+        (local_day AT TIME ZONE 'Europe/Brussels') AS starts_at,
+        ((local_day+interval '1 day') AT TIME ZONE 'Europe/Brussels') AS ends_at
+      FROM generate_series(
+        date_trunc('day',CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels')-($1::int-1)*interval '1 day',
+        date_trunc('day',CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels'),interval '1 day'
+      ) local_day
+    ), sessions AS (
+      SELECT s.*,
+        CASE WHEN s.ended_at IS NULL THEN COALESCE(s.paused_at,CURRENT_TIMESTAMP) ELSE s.ended_at END AS effective_end,
+        GREATEST(0,CASE WHEN s.ended_at IS NULL THEN
+          FLOOR(EXTRACT(EPOCH FROM (COALESCE(s.paused_at,CURRENT_TIMESTAMP)-s.started_at)))::bigint-COALESCE(s.paused_seconds,0)
+          ELSE COALESCE(s.duration_seconds,0)::bigint END) AS active_seconds,
+        GREATEST(1,FLOOR(EXTRACT(EPOCH FROM ((CASE WHEN s.ended_at IS NULL THEN COALESCE(s.paused_at,CURRENT_TIMESTAMP) ELSE s.ended_at END)-s.started_at)))::bigint) AS wall_seconds
+      FROM attendance_sessions s
     )
-    SELECT d.day,
-      COALESCE(SUM(CASE WHEN s.id IS NULL THEN 0 ELSE
-        CASE WHEN s.ended_at IS NULL THEN GREATEST(0,
-          FLOOR(EXTRACT(EPOCH FROM (COALESCE(s.paused_at,CURRENT_TIMESTAMP)-s.started_at)))::int
-          - COALESCE(s.paused_seconds,0))
-        ELSE COALESCE(s.duration_seconds,0) END END),0)::bigint AS total_seconds
+    SELECT d.local_day AS day,
+      COALESCE(ROUND(SUM(
+        CASE WHEN s.id IS NULL THEN 0 ELSE
+          GREATEST(0,EXTRACT(EPOCH FROM (LEAST(s.effective_end,d.ends_at)-GREATEST(s.started_at,d.starts_at))))
+          * LEAST(1.0,s.active_seconds::numeric/s.wall_seconds::numeric)
+        END
+      )),0)::bigint AS total_seconds
     FROM dates d
-    LEFT JOIN attendance_sessions s ON date_trunc('day',s.started_at)=d.day
-    GROUP BY d.day ORDER BY d.day`,[safe])).rows;
+    LEFT JOIN sessions s ON s.effective_end>d.starts_at AND s.started_at<d.ends_at
+    GROUP BY d.local_day ORDER BY d.local_day`,[safe])).rows;
   return rows.map(r=>({day:r.day,total_seconds:Number(r.total_seconds||0)}));
 }
 
@@ -158,4 +185,4 @@ async function getWeeklyBestOfficer(){
 }
 
 async function closeDatabase(){ /* pool partagé: fermeture gérée par database.js */ }
-module.exports={listNotes,countUnreadNotes,markNotesRead,addNote,deleteNote,listSanctions,addSanction,updateSanctionStatus,deleteSanction,listActivity,listOfficerActivity,getAttendanceSessions,getAttendanceActive,getAttendanceTotalsDashboard,getAttendanceDaily,getOfficerAttendanceTotal,getWeeklyBestOfficer,closeDatabase};
+module.exports={ready,listNotes,countUnreadNotes,markNotesRead,addNote,deleteNote,listSanctions,addSanction,updateSanctionStatusForUser,deleteSanctionForUser,listActivity,listOfficerActivity,getAttendanceSessions,getAttendanceActive,getAttendanceTotalsDashboard,getAttendanceDaily,getOfficerAttendanceTotal,getWeeklyBestOfficer,closeDatabase};

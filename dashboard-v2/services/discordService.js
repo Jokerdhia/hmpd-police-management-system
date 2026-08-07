@@ -1,5 +1,6 @@
 const { REST, Routes } = require("discord.js");
 const { getAllGradeRoleIds } = require("../config/grades");
+const { markManagedGradeChange } = require("../../services/gradeChangeGuard");
 
 const TOKEN = String(process.env.TOKEN || "").trim();
 const GUILD_ID = String(process.env.GUILD_ID || "").trim();
@@ -254,6 +255,10 @@ async function setMemberGradeRole(
     true
   );
 
+  // Empêche le listener GuildMemberUpdate de traiter ce changement géré par le MDT
+  // comme une modification manuelle Discord.
+  markManagedGradeChange(safeUserId);
+
   if (!member.found) {
     throw new Error(
       "Le policier n'est plus présent dans le serveur."
@@ -279,50 +284,35 @@ async function setMemberGradeRole(
     : [];
 
   const rolesToRemove = currentRoles.filter(
-    (roleId) =>
-      allGradeRoleIds.includes(roleId) &&
-      roleId !== safeExpectedRoleId
+    (roleId) => allGradeRoleIds.includes(roleId) && roleId !== safeExpectedRoleId
   );
 
-  for (const roleId of rolesToRemove) {
+  // V6 : on ajoute d'abord le nouveau grade. Si Discord refuse l'ajout,
+  // l'ancien grade reste intact au lieu de laisser le policier sans grade.
+  const newlyAdded = !currentRoles.includes(safeExpectedRoleId);
+  if (newlyAdded) {
     try {
-      await rest.delete(
-        Routes.guildMemberRole(
-          GUILD_ID,
-          safeUserId,
-          roleId
-        )
+      await rest.put(
+        Routes.guildMemberRole(GUILD_ID, safeUserId, safeExpectedRoleId)
       );
     } catch (error) {
-      console.error(
-        `❌ Impossible de retirer le rôle ${roleId} à ${safeUserId} :`,
-        error?.message || error
-      );
-
-      throw new Error(
-        "Impossible de retirer l'ancien rôle de grade. Vérifie la hiérarchie des rôles du bot."
-      );
+      console.error(`❌ Impossible d'ajouter le rôle ${safeExpectedRoleId} à ${safeUserId} :`, error?.message || error);
+      throw new Error("Impossible d'ajouter le nouveau rôle de grade. Vérifie la hiérarchie des rôles du bot.");
     }
   }
 
-  if (!currentRoles.includes(safeExpectedRoleId)) {
+  for (const roleId of rolesToRemove) {
     try {
-      await rest.put(
-        Routes.guildMemberRole(
-          GUILD_ID,
-          safeUserId,
-          safeExpectedRoleId
-        )
-      );
+      await rest.delete(Routes.guildMemberRole(GUILD_ID, safeUserId, roleId));
     } catch (error) {
-      console.error(
-        `❌ Impossible d'ajouter le rôle ${safeExpectedRoleId} à ${safeUserId} :`,
-        error?.message || error
-      );
-
-      throw new Error(
-        "Impossible d'ajouter le nouveau rôle de grade. Vérifie la hiérarchie des rôles du bot."
-      );
+      console.error(`❌ Impossible de retirer le rôle ${roleId} à ${safeUserId} :`, error?.message || error);
+      // Retour arrière best-effort : évite qu'une synchronisation périodique
+      // interprète un ajout partiel comme une vraie promotion.
+      if (newlyAdded) {
+        await rest.delete(Routes.guildMemberRole(GUILD_ID, safeUserId, safeExpectedRoleId)).catch(() => {});
+      }
+      memberCache.delete(safeUserId);
+      throw new Error("Impossible de retirer l'ancien rôle de grade. Le changement Discord a été annulé autant que possible.");
     }
   }
 

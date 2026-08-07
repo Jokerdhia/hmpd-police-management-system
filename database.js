@@ -17,7 +17,7 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,
   statement_timeout: Number.parseInt(process.env.DATABASE_STATEMENT_TIMEOUT_MS, 10) || 15000,
-  application_name: "hmpd-v2",
+  application_name: "hmpd-v6",
 });
 
 pool.on("error", (error) => {
@@ -154,6 +154,12 @@ async function getOfficer(userId) {
   await ready;
   const safeUserId = normalizeUserId(userId);
   await ensureOfficer(pool, safeUserId);
+  const { rows } = await pool.query(`SELECT user_id, points, grade, created_at, updated_at FROM officers WHERE user_id=$1`, [safeUserId]);
+  return rows[0] || null;
+}
+async function getOfficerExisting(userId) {
+  await ready;
+  const safeUserId = normalizeUserId(userId);
   const { rows } = await pool.query(`SELECT user_id, points, grade, created_at, updated_at FROM officers WHERE user_id=$1`, [safeUserId]);
   return rows[0] || null;
 }
@@ -643,6 +649,23 @@ async function deleteOfficersCompletely(userIds) {
   try {
     await client.query("BEGIN");
 
+    // V6 : si l'ancien policier a agi comme responsable sur le dossier
+    // d'autres agents, on conserve la preuve administrative mais on retire son ID.
+    const anonymize = [
+      "UPDATE officer_notes SET author_id='FORMER_OFFICER' WHERE author_id = ANY($1::text[])",
+      "UPDATE officer_sanctions SET author_id='FORMER_OFFICER' WHERE author_id = ANY($1::text[])",
+      "UPDATE admin_audit_log SET actor_id='FORMER_OFFICER' WHERE actor_id = ANY($1::text[])",
+      "UPDATE rp_evaluations SET evaluator_id='FORMER_OFFICER' WHERE evaluator_id = ANY($1::text[])",
+      "UPDATE grade_history SET actor_id='FORMER_OFFICER' WHERE actor_id = ANY($1::text[])",
+      "UPDATE points_history SET moderator_id='FORMER_OFFICER' WHERE moderator_id = ANY($1::text[])",
+      "UPDATE attendance_sessions SET started_by='FORMER_OFFICER' WHERE started_by = ANY($1::text[])",
+      "UPDATE attendance_sessions SET ended_by='FORMER_OFFICER' WHERE ended_by = ANY($1::text[])",
+      "UPDATE attendance_adjustments SET moderator_id='FORMER_OFFICER' WHERE moderator_id = ANY($1::text[])"
+    ];
+    for (const sql of anonymize) {
+      try { await client.query(sql,[ids]); } catch(error) { if(error?.code!=="42P01") throw error; }
+    }
+
     // Tables sans FK vers officers : nettoyage explicite pour ne laisser
     // aucune donnée personnelle orpheline dans Neon.
     const cleanup = [
@@ -657,7 +680,7 @@ async function deleteOfficersCompletely(userIds) {
     ];
 
     for (const sql of cleanup) {
-      // Les tables Dashboard/Promotion sont créées au démarrage de la V5.
+      // Les tables Dashboard/Promotion sont créées au démarrage du Dashboard.
       // Si une ancienne base n'en possède pas encore une, on ignore uniquement
       // l'erreur table inexistante pour permettre la migration sans blocage.
       try {
@@ -716,7 +739,7 @@ async function closeDatabase() {
 
 module.exports = {
   pool,
-  ready, getOfficer, updateOfficer, changeOfficerPoints, addPointsHistory,
+  ready, getOfficer, getOfficerExisting, updateOfficer, changeOfficerPoints, addPointsHistory,
   getOfficerHistory, getLeaderboard, getAllOfficers, countOfficers,
   startAttendance,
   pauseAttendance,

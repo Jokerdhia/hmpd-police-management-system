@@ -1,5 +1,6 @@
 const {
   getOfficer,
+  getOfficerExisting,
   getAllOfficers,
   getOfficerHistory,
   getLeaderboard,
@@ -322,7 +323,7 @@ async function listOfficers() {
 
 async function getOfficerProfile(userId) {
   const safeUserId = normalizeUserId(userId);
-  const officer = await getOfficer(safeUserId);
+  const officer = await getOfficerExisting(safeUserId);
 
   if (!officer) {
     const error = new Error("Dossier policier introuvable.");

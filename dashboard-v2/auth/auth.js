@@ -179,13 +179,13 @@ function getDiscordErrorCode(error) {
  * - consultation des policiers ;
  * - consultation du classement.
  *
- * Police + High Command :
+ * Police + permissions par grade :
  * - accès au dashboard ;
  * - modification des points ;
  * - actions administratives protégées.
  *
- * High Command sans Police :
- * - aucun accès.
+ * High Grade sans Police :
+ * - accès au MDT, mais aucune modification hiérarchique sans grade Police reconnu.
  */
 function getPermissions(member) {
   const memberRoles = Array.isArray(member?.roles)
@@ -220,7 +220,7 @@ function getPermissions(member) {
     canViewAllOfficers: isHighGrade || (hasPoliceRole && atLeast('Sergeant')),
     canEvaluate: isHighGrade || (hasPoliceRole && atLeast('Sergeant')),
     canSanction: isHighGrade || (hasPoliceRole && atLeast('Lieutenant')),
-    canManagePoints: isHighGrade || (hasPoliceRole && atLeast('Lieutenant')),
+    canManagePoints: isHighGrade,
     canManagePromotions: isHighGrade || (hasPoliceRole && atLeast('Captain')),
     canApprovePromotions: isHighGrade || (hasPoliceRole && atLeast('Deputy Chief')),
     canViewCommandCenter: isHighGrade || (hasPoliceRole && atLeast('Lieutenant')),
@@ -964,7 +964,8 @@ async function requireAuth(
   try {
     const member =
       await fetchMember(
-        sessionUser.id
+        sessionUser.id,
+        ["POST","PUT","PATCH","DELETE"].includes(request.method)
       );
 
     if (!member) {
@@ -1085,7 +1086,8 @@ async function requireHighCommand(
   try {
     const member =
       await fetchMember(
-        sessionUser.id
+        sessionUser.id,
+        ["POST", "PUT", "PATCH", "DELETE"].includes(request.method)
       );
 
     if (!member) {
@@ -1171,7 +1173,7 @@ function requireCapability(capability, label = 'Permission insuffisante.') {
     const sessionUser = request.session?.user;
     if (!sessionUser?.id) return response.status(401).json({success:false,message:'Connexion Discord requise.',loginUrl:'/login'});
     try {
-      const member = await fetchMember(sessionUser.id);
+      const member = await fetchMember(sessionUser.id, ["POST","PUT","PATCH","DELETE"].includes(request.method));
       if (!member) return response.status(403).json({success:false,message:"Tu n'es plus membre du serveur HMPD."});
       const permissions = getPermissions(member);
       if (!permissions.canView) return response.status(403).json({success:false,message:'Le rôle Police ou High Grade est nécessaire.'});
@@ -1202,7 +1204,7 @@ async function getTargetHierarchyAccess(request, targetUserId) {
     throw error;
   }
 
-  const targetMember = await fetchMember(normalizedTargetId, false);
+  const targetMember = await fetchMember(normalizedTargetId, ["POST","PUT","PATCH","DELETE"].includes(String(request?.method||"GET").toUpperCase()));
   if (!targetMember) {
     const error = new Error("Ce policier n'est plus présent sur le serveur Discord.");
     error.status = 404;
@@ -1211,6 +1213,13 @@ async function getTargetHierarchyAccess(request, targetUserId) {
   }
 
   const targetPermissions = getPermissions(targetMember);
+  const isMutation = ["POST","PUT","PATCH","DELETE"].includes(String(request?.method||"GET").toUpperCase());
+  if (isMutation && !targetPermissions.hasPoliceRole) {
+    const error = new Error("Ce membre n'a plus le rôle Police : aucune modification de dossier n'est autorisée.");
+    error.status = 409;
+    error.publicMessage = error.message;
+    throw error;
+  }
   const actorGrade = actorPermissions.grade || null;
   const targetGrade = targetPermissions.grade || null;
   const actorGradeIndex = Number(actorPermissions.gradeIndex ?? -1);

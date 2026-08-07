@@ -6,8 +6,8 @@ const {
   addNote,
   listSanctions,
   addSanction,
-  updateSanctionStatus,
-  deleteSanction,
+  updateSanctionStatusForUser,
+  deleteSanctionForUser,
   listActivity,
 } = require("../dashboardDatabase");
 
@@ -230,7 +230,7 @@ router.get("/officers/:userId/sanctions", async (request, response, next) => {
 
 router.post(
   "/officers/:userId/sanctions",
-  requireHighCommand,
+  requireCapability('canSanction','Grade Lieutenant ou High Grade requis pour gérer les sanctions.'),
   requireTargetNotHigher('userId'),
   async (request, response, next) => {
     try {
@@ -289,7 +289,7 @@ router.patch(
     try {
       const userId = normalizeDiscordId(request.params.userId, "Identifiant du policier");
       const status = String(request.body?.status || "").trim().toLowerCase();
-      const result = await updateSanctionStatus(request.params.id, status);
+      const result = await updateSanctionStatusForUser(userId, request.params.id, status);
       if (!result.updated) {
         const error = new Error("Sanction introuvable."); error.status = 404; error.publicMessage = error.message; throw error;
       }
@@ -307,7 +307,7 @@ router.delete(
   async (request, response, next) => {
     try {
       const userId = normalizeDiscordId(request.params.userId, "Identifiant du policier");
-      const result = await deleteSanction(request.params.id);
+      const result = await deleteSanctionForUser(userId, request.params.id);
       if (!result.deleted) {
         const error = new Error("Sanction introuvable."); error.status = 404; error.publicMessage = error.message; throw error;
       }

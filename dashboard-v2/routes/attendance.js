@@ -89,7 +89,6 @@ router.post("/:userId/force-stop",requireHighCommand,requireTargetNotHigher('use
   if(remarkChannelId){try{await sendChannelMessage(remarkChannelId,{content:`<@${userId}>`,embeds:[{color:15158332,title:"⚠️ تنبيه إداري",description:`تم إنهاء خدمة <@${userId}> إجبارياً بسبب عدم تسجيل نهاية الخدمة.`,fields:[{name:"⏳ خصم الساعات",value:penaltyRemovedSeconds>0?`تم خصم **${formatDurationAr(penaltyRemovedSeconds)}** من مجموع ساعاتك.`:"لم تتوفر ساعات كافية للخصم.",inline:false},{name:"📝 ملاحظة القيادة",value:remark,inline:false},{name:"🛡 بواسطة",value:`<@${moderatorId}>`,inline:true}],footer:{text:"Harmony Police • يرجى إنهاء الخدمة بشكل صحيح"}}],allowed_mentions:{parse:[],users:[String(userId)].filter(id=>/^\d{17,20}$/.test(id))}});remarkSent=true}catch(err){remarkError=err?.message||String(err);console.error("Envoi remarque fin forcée:",remarkError)}}
   const penaltyText=penaltyRemovedSeconds>0?`${Math.floor(penaltyRemovedSeconds/3600)} h ${Math.floor((penaltyRemovedSeconds%3600)/60)} min retirées`:"aucune heure disponible à retirer";
   broadcast("attendance-changed",{userId,action:"force-stop"});
-  broadcast("attendance-changed",{userId,action:"force-pause"});
   res.json({success:true,message:remarkSent?`Fin de service forcée, ${penaltyText}, et remarque envoyée.`:`La fin de service a été enregistrée (${penaltyText}), mais la remarque Discord n’a pas pu être envoyée.`,remarkSent,remarkError,penaltyRequestedSeconds,penaltyRemovedSeconds,penaltyError,session:result.session});
 }catch(e){next(e)}});
 
@@ -123,6 +122,7 @@ router.post("/:userId/force-pause",requireHighCommand,requireTargetNotHigher('us
     await sendChannelMessage(remarkChannelId,{content:`<@${userId}>`,embeds:[{color:16753920,title:"☕ تنبيه إداري — استراحة إجبارية",description:`تم تغيير حالة <@${userId}> إلى **استراحة** بسبب عدم تسجيل الاستراحة.`,fields:[{name:"⏳ خصم الساعات",value:penaltyRemovedSeconds>0?`تم خصم **${formatDurationAr(penaltyRemovedSeconds)}** من مجموع ساعاتك.`:"لم تتوفر ساعات كافية للخصم.",inline:false},{name:"📝 ملاحظة القيادة",value:remark,inline:false},{name:"🛡 بواسطة",value:`<@${moderatorId}>`,inline:true}],footer:{text:"Harmony Police • يرجى تسجيل الاستراحة في الوقت المناسب"}}],allowed_mentions:{parse:[],users:[String(userId)].filter(id=>/^\d{17,20}$/.test(id))}});
     remarkSent=true;
   }catch(err){remarkError=err?.message||String(err);console.error("Envoi remarque pause forcée:",remarkError)}
+  broadcast("attendance-changed",{userId,action:"force-pause"});
   res.json({success:true,message:remarkSent?"Le policier a été mis en pause, la pénalité a été appliquée et la remarque envoyée.":"Le policier a été mis en pause, mais la remarque Discord n’a pas pu être envoyée.",remarkSent,remarkError,penaltyRequestedSeconds,penaltyRemovedSeconds,penaltyError,session:pauseResult.session});
 }catch(e){next(e)}});
 

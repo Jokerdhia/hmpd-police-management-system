@@ -139,7 +139,19 @@ const limiter = rateLimit({
   },
 });
 
-app.use(limiter);
+// V6 : le rate-limit concerne l'API, pas les fichiers CSS/JS/images.
+app.use("/api", limiter);
+
+const authLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  limit: 60,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { success:false, message:"Trop de tentatives de connexion. Réessaie dans quelques minutes." },
+  validate: { xForwardedForHeader:false },
+});
+app.use("/auth", authLimiter);
+app.use("/login", authLimiter);
 
 /* =========================================================
    LECTURE DES REQUÊTES
@@ -270,8 +282,8 @@ app.get(
     return response.status(healthy ? 200 : 503).json({
       success: healthy,
       status: healthy ? "online" : "degraded",
-      version: "4.0.0",
-      dashboard: "HMPD Dashboard Pro",
+      version: "6.0.0",
+      dashboard: "HMPD V6 Command Center",
       oauthEnabled,
       database,
       databaseLatencyMs,

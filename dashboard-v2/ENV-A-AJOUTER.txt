@@ -1,32 +1,20 @@
-VARIABLES RENDER OBLIGATOIRES
+HMPD V6 — VARIABLES RENDER
 
+OBLIGATOIRES
 CLIENT_ID=ID_APPLICATION_DISCORD
 CLIENT_SECRET=SECRET_APPLICATION_DISCORD
 TOKEN=TOKEN_DU_BOT
 GUILD_ID=ID_DU_SERVEUR_DISCORD
-DISCORD_CALLBACK_URL=https://hmpd-police-management-system.onrender.com/auth/discord/callback
-SESSION_SECRET=UNE_LONGUE_CLE_ALEATOIRE
-
-# Le rôle général que TOUS les policiers possèdent.
-ROLE_POLICE=ID_DU_ROLE_POLICE
-
-# Le rôle qui autorise l'ajout et le retrait de points.
-ROLE_HIGH_COMMAND=ID_DU_ROLE_HIGH_GRADE
-
-ROLE_SYNC_INTERVAL_MS=30000
+DATABASE_URL=URL_NEON_POSTGRESQL
+DISCORD_CALLBACK_URL=https://TON-SERVICE.onrender.com/auth/discord/callback
+SESSION_SECRET=UNE_CLE_ALEATOIRE_MINIMUM_32_CARACTERES
 NODE_ENV=production
 
-IMPORTANT
-- Mets uniquement les identifiants numériques, pas les noms des rôles.
-- Tous les policiers, y compris les High Grades, doivent posséder ROLE_POLICE.
-- Tu peux surveiller plusieurs rôles Police en les séparant par une virgule :
-  ROLE_POLICE=ID_ROLE_1,ID_ROLE_2,ID_ROLE_3
-- Retirer ROLE_POLICE remet les points à zéro, même si ROLE_HIGH_COMMAND est encore présent.
-- Retirer uniquement ROLE_HIGH_COMMAND conserve l'accès en lecture si ROLE_POLICE est présent, mais retire immédiatement les boutons de points.
+RÔLES
+ROLE_POLICE=ID_DU_ROLE_POLICE
+ROLE_HIGH_GRADE=ID_DU_ROLE_HIGH_GRADE
+# ROLE_HIGH_COMMAND reste accepté comme ancien nom de variable.
 
-
-# IMPORTANT — vrais grades Discord affichés dans les profils
-# Mets les identifiants des rôles correspondant à ton serveur.
 ROLE_ACADEMY=ID_ROLE_ACADEMY
 ROLE_OFFICER=ID_ROLE_OFFICER
 ROLE_SENIOR_OFFICER=ID_ROLE_SENIOR_OFFICER
@@ -40,15 +28,31 @@ ROLE_ASSISTANT_CHIEF=ID_ROLE_ASSISTANT_CHIEF
 ROLE_VICE_CHIEF=ID_ROLE_VICE_CHIEF
 ROLE_CHIEF_POLICE=ID_ROLE_CHIEF_POLICE
 
-Ordre des grades : Academy → Officer → Senior Officer → Sergeant → First Sergeant → Lieutenant → Captain → Commander → Deputy Chief → Assistant Chief → Vice Chief → Chief Police.
+PROMOTIONS
+PROMOTION_MIN_DAILY_SECONDS=7200
+# 7200 = 2h. Une journée >=2h vaut +1 jour, cumulatif depuis la prise du grade.
+PROMOTION_CENTER_CACHE_MS=10000
+PROMOTION_CHANNEL_ID=ID_SALON_PROMOTIONS
 
-Le dashboard choisit automatiquement le rôle le plus élevé présent sur le membre.
-Sans ces variables, il utilise l'ancien grade enregistré dans la base.
+SYNCHRONISATION / MAINTENANCE
+ROLE_SYNC_INTERVAL_MS=60000
+MAX_OPEN_ATTENDANCE_HOURS=18
+AUDIT_RETENTION_DAYS=180
+DATABASE_POOL_MAX=10
+DATABASE_STATEMENT_TIMEOUT_MS=15000
 
-# Salon Discord où envoyer une remarque au policier après une fin de service forcée.
-# Le bot doit avoir la permission Voir le salon et Envoyer des messages.
-ATTENDANCE_REMARK_CHANNEL_ID=ID_DU_SALON_REMARQUES
-
-# Pénalité appliquée lorsqu’un High Command force la mise en pause.
-# Valeur par défaut : 1 heure.
+PRÉSENCE
+ATTENDANCE_CHANNEL_ID=ID_SALON_PRESENCE
+ATTENDANCE_LOG_CHANNEL_ID=ID_SALON_LOGS_PRESENCE
+ATTENDANCE_REMARK_CHANNEL_ID=ID_SALON_REMARQUES
 FORCED_PAUSE_PENALTY_HOURS=1
+FORCED_END_PENALTY_HOURS=5
+
+RÈGLES V6 IMPORTANTES
+- High Grade peut accéder à tout le MDT.
+- High Grade ne peut jamais modifier son propre dossier.
+- Une cible de grade supérieur est toujours en lecture seule.
+- Les points mesurent l'activité et ne donnent jamais une promotion automatique.
+- Un changement manuel de grade Discord synchronise les points de référence et repart à 0/7 pour le nouveau grade.
+- Retirer ROLE_POLICE supprime complètement le dossier HMPD de Neon. Les anciennes actions faites comme responsable sur d'autres dossiers sont anonymisées pour préserver l'historique.
+- Le rôle High Grade peut être détecté automatiquement par le nom « High Grade » ou « High Command », mais ROLE_HIGH_GRADE est recommandé.

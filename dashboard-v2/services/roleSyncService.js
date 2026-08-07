@@ -14,6 +14,7 @@ const {
 
 const { invalidateOfficerCache } = require("./officerService");
 const { GRADES, getDiscordGradeFromRoles } = require("../config/grades");
+const { isManagedGradeChange } = require("../../services/gradeChangeGuard");
 
 const POLICE_ROLE_IDS = String(process.env.ROLE_POLICE || "")
   .split(",")
@@ -22,6 +23,7 @@ const POLICE_ROLE_IDS = String(process.env.ROLE_POLICE || "")
 
 let running = false;
 let syncTimer = null;
+let lastMaintenanceAt = 0;
 
 function getMemberRoles(member) {
   return Array.isArray(member?.roles)
@@ -68,7 +70,10 @@ async function syncPoliceRoles() {
 
   try {
     clearMemberCache();
-    await cleanupOperationalData();
+    if (Date.now() - lastMaintenanceAt >= 60 * 60 * 1000) {
+      await cleanupOperationalData();
+      lastMaintenanceAt = Date.now();
+    }
 
     const members = await listGuildMembers();
     const policeMembers = members.filter(
@@ -96,7 +101,7 @@ async function syncPoliceRoles() {
       // Filet de sécurité : si un événement Discord a été manqué pendant un
       // redémarrage, le prochain cycle remet le grade + les points de référence.
       const discordGradeName = getDiscordGradeFromRoles(getMemberRoles(member));
-      if (discordGradeName && String(officer?.grade || "") !== discordGradeName) {
+      if (discordGradeName && String(officer?.grade || "") !== discordGradeName && !isManagedGradeChange(userId)) {
         const grade = GRADES.find((item) => item.name === discordGradeName);
         if (grade) {
           const oldGrade = String(officer?.grade || "Academy");
@@ -105,7 +110,7 @@ async function syncPoliceRoles() {
           await updateOfficer(userId, newPoints, grade.name);
           // Un changement de grade redémarre l'ancienneté de carrière.
           await pool.query(`UPDATE officers SET rank_started_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE user_id=$1`,[userId]).catch(()=>{});
-          await pool.query(`UPDATE promotion_cases SET status='rejected',decision_reason=$2,decided_by='SYSTEM',decided_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE user_id=$1 AND from_grade<>$3 AND status IN ('progress','eligible','evaluation','frozen')`,[userId,`Dossier clôturé automatiquement : grade Discord changé vers ${grade.name}`,grade.name]).catch(()=>{});
+          await pool.query(`UPDATE promotion_cases SET status='rejected',decision_reason=$2,decided_by='SYSTEM',decided_at=CURRENT_TIMESTAMP,closed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE user_id=$1 AND closed_at IS NULL AND status<>'approved'`,[userId,`Dossier clôturé automatiquement : grade Discord changé vers ${grade.name}`]).catch(()=>{});
           if (oldPoints !== newPoints) {
             await addPointsHistory({
               userId,

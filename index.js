@@ -1,4 +1,5 @@
 require("dotenv").config();
+const { isManagedGradeChange } = require("./services/gradeChangeGuard");
 
 /*
 |--------------------------------------------------------------------------
@@ -81,7 +82,7 @@ const TOKEN = process.env.TOKEN;
 const PROMOTION_CHANNEL_ID = process.env.PROMOTION_CHANNEL_ID;
 const LOG_CHANNEL_ID = process.env.LOG_CHANNEL_ID;
 
-const ROLE_HIGH_COMMAND = process.env.ROLE_HIGH_COMMAND;
+const ROLE_HIGH_COMMAND = String(process.env.ROLE_HIGH_GRADE || process.env.ROLE_HIGH_COMMAND || "").trim();
 const POLICE_ROLE_IDS = String(process.env.ROLE_POLICE || "")
   .split(",")
   .map((id) => id.trim())
@@ -118,7 +119,6 @@ const requiredEnvironmentVariables = [
   "TOKEN",
   "PROMOTION_CHANNEL_ID",
   "LOG_CHANNEL_ID",
-  "ROLE_HIGH_COMMAND",
   "ROLE_POLICE",
   "ROLE_ACADEMY",
   "ROLE_OFFICER",
@@ -154,35 +154,6 @@ if (missingVariables.length > 0) {
 |--------------------------------------------------------------------------
 */
 
-function getGradeFromPoints(points) {
-  let currentGrade = GRADES[0];
-
-  for (const grade of GRADES) {
-    if (points >= grade.points) {
-      currentGrade = grade;
-    }
-  }
-
-  return currentGrade;
-}
-
-function getNextGrade(points) {
-  return GRADES.find((grade) => grade.points > points) || null;
-}
-
-function getPreviousGrade(points) {
-  const currentGrade = getGradeFromPoints(points);
-  const currentIndex = GRADES.findIndex(
-    (grade) => grade.roleId === currentGrade.roleId
-  );
-
-  if (currentIndex <= 0) {
-    return null;
-  }
-
-  return GRADES[currentIndex - 1];
-}
-
 function getAllGradeRoleIds() {
   return GRADES.map((grade) => grade.roleId);
 }
@@ -212,7 +183,8 @@ function isHighCommand(interaction) {
   }
 
   const hasHighCommandRole =
-    interaction.member.roles.cache.has(ROLE_HIGH_COMMAND);
+    (ROLE_HIGH_COMMAND && interaction.member.roles.cache.has(ROLE_HIGH_COMMAND)) ||
+    interaction.member.roles.cache.some((role) => /^(high[ _-]?(grade|command))$/i.test(String(role.name || '').trim()));
 
   const isServerAdministrator =
     interaction.memberPermissions?.has(
@@ -259,13 +231,11 @@ async function verifyConfiguredRoles(guild) {
     }
   }
 
-  const highCommandRole = await guild.roles
-    .fetch(ROLE_HIGH_COMMAND)
-    .catch(() => null);
+  const highCommandRole = ROLE_HIGH_COMMAND
+    ? await guild.roles.fetch(ROLE_HIGH_COMMAND).catch(() => null)
+    : guild.roles.cache.find((role) => /^(high[ _-]?(grade|command))$/i.test(String(role.name || '').trim())) || null;
 
-  if (!highCommandRole) {
-    missingRoles.push("High Command");
-  }
+  if (!highCommandRole) missingRoles.push("High Grade");
 
   if (missingRoles.length > 0) {
     throw new Error(
@@ -540,92 +510,6 @@ async function sendDemotionLog({
 |--------------------------------------------------------------------------
 */
 
-async function synchronizeMemberGrade(
-  member,
-  points,
-  announceChange = true
-) {
-  verifyMemberCanBeManaged(member);
-
-  const expectedGrade = getGradeFromPoints(points);
-  const gradeRoleIds = getAllGradeRoleIds();
-
-  const currentGradeRole = member.roles.cache.find((role) =>
-    gradeRoleIds.includes(role.id)
-  );
-
-  const oldGrade =
-    GRADES.find(
-      (grade) => grade.roleId === currentGradeRole?.id
-    ) || getGradeFromPoints(points);
-
-  const rolesToRemove = member.roles.cache.filter(
-    (role) =>
-      gradeRoleIds.includes(role.id) &&
-      role.id !== expectedGrade.roleId
-  );
-
-  if (rolesToRemove.size > 0) {
-    await member.roles.remove(
-      rolesToRemove,
-      "Synchronisation automatique du grade HMPD"
-    );
-  }
-
-  if (!member.roles.cache.has(expectedGrade.roleId)) {
-    await member.roles.add(
-      expectedGrade.roleId,
-      `Grade HMPD correspondant à ${points} points`
-    );
-  }
-
-  await updateOfficer(
-    member.id,
-    points,
-    expectedGrade.name
-  );
-
-  const oldGradeIndex = GRADES.findIndex(
-    (grade) => grade.roleId === oldGrade.roleId
-  );
-
-  const newGradeIndex = GRADES.findIndex(
-    (grade) => grade.roleId === expectedGrade.roleId
-  );
-
-  const promoted = newGradeIndex > oldGradeIndex;
-  const demoted = newGradeIndex < oldGradeIndex;
-
-  if (announceChange && promoted) {
-    await sendPromotionAnnouncement({
-      guild: member.guild,
-      member,
-      oldGrade,
-      newGrade: expectedGrade,
-      points,
-    });
-  }
-
-  if (announceChange && demoted) {
-    await sendDemotionLog({
-      guild: member.guild,
-      member,
-      oldGrade,
-      newGrade: expectedGrade,
-      points,
-    });
-  }
-
-  return {
-    changed:
-      !currentGradeRole ||
-      currentGradeRole.id !== expectedGrade.roleId,
-    promoted,
-    demoted,
-    oldGrade,
-    newGrade: expectedGrade,
-  };
-}
 
 /*
 |--------------------------------------------------------------------------
@@ -677,6 +561,18 @@ async function modifyPoints({
   );
 
   verifyMemberCanBeManaged(member);
+
+  if (member.id === interaction.user.id) {
+    throw Object.assign(new Error("AUTO_MODIFICATION_FORBIDDEN"), { publicMessage: "🚫 Tu ne peux pas modifier tes propres points. Un autre High Grade doit effectuer cette action." });
+  }
+
+  const actorGrade = getDiscordGradeFromMember(interaction.member);
+  const targetGrade = getDiscordGradeFromMember(member);
+  const actorIndex = actorGrade ? GRADES.findIndex((grade) => grade.name === actorGrade.name) : -1;
+  const targetIndex = targetGrade ? GRADES.findIndex((grade) => grade.name === targetGrade.name) : -1;
+  if (targetIndex >= 0 && (actorIndex < 0 || targetIndex > actorIndex)) {
+    throw Object.assign(new Error("TARGET_HIGHER_GRADE"), { publicMessage: `🔒 Impossible de modifier ${targetGrade.name} : ce grade est supérieur à ton grade ${actorGrade?.name || "non défini"}.` });
+  }
 
   const databaseResult = await changeOfficerPoints({
     userId: user.id,
@@ -826,9 +722,9 @@ async function synchronizeDiscordGradePoints(member, source = "modification Disc
     );
     await pool.query(
       `UPDATE promotion_cases
-       SET status='rejected', decision_reason=$2, decided_by='SYSTEM', decided_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
-       WHERE user_id=$1 AND from_grade<>$3 AND status IN ('progress','eligible','evaluation','frozen')`,
-      [member.id, `Dossier clôturé automatiquement : grade Discord changé vers ${discordGrade.name}`, discordGrade.name]
+       SET status='rejected', decision_reason=$2, decided_by='SYSTEM', decided_at=CURRENT_TIMESTAMP, closed_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP
+       WHERE user_id=$1 AND closed_at IS NULL AND status<>'approved'`,
+      [member.id, `Dossier clôturé automatiquement : grade Discord changé vers ${discordGrade.name}`]
     ).catch((error) => { if (error?.code !== "42P01") throw error; });
   } catch (error) {
     if (error?.code !== "42703" && error?.code !== "42P01") {
@@ -871,6 +767,8 @@ async function removeFormerPoliceOfficer(member, source) {
   try {
     const result = await deleteOfficerCompletely(member.id);
     if (result.deleted > 0) {
+      try { require("./dashboard-v2/services/officerService").invalidateOfficerCache(); } catch (_) {}
+      try { require("./dashboard-v2/services/discordService").clearMemberFromCache(member.id); } catch (_) {}
       console.log(`🧹 ${member.user?.tag || member.id} supprimé complètement de Neon (${source}).`);
     }
   } catch (error) {
@@ -890,6 +788,10 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
     const oldGrade = getDiscordGradeFromMember(oldMember)?.name || null;
     const newGrade = getDiscordGradeFromMember(newMember)?.name || null;
     if (oldGrade !== newGrade && newGrade) {
+      if (isManagedGradeChange(newMember.id)) {
+        console.log(`ℹ️ Changement de grade MDT ignoré par le sync manuel : ${newMember.user?.tag || newMember.id} (${oldGrade || '—'} → ${newGrade})`);
+        return;
+      }
       try {
         await synchronizeDiscordGradePoints(newMember, "rôle de grade modifié");
       } catch (error) {
@@ -1087,8 +989,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
         interaction.options.getUser("membre") ||
         interaction.user;
 
-      const officer = await getOfficer(user.id);
       const member = await interaction.guild.members.fetch(user.id).catch(() => null);
+      if (!member || !memberHasPoliceRole(member)) {
+        await interaction.reply(privateReply("❌ Ce membre n'a pas le rôle Police et ne possède pas de dossier HMPD actif."));
+        return;
+      }
+      const officer = await getOfficer(user.id);
       const currentGrade =
         getDiscordGradeFromMember(member) ||
         GRADES.find((grade) => grade.name === String(officer.grade || "")) ||
@@ -1334,27 +1240,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
       error
     );
 
-    let errorMessage =
+    let errorMessage = error?.publicMessage ||
       "❌ Une erreur est survenue pendant la commande.";
 
-    if (error.message === "MEMBER_IS_OWNER") {
+    if (!error?.publicMessage && error.message === "MEMBER_IS_OWNER") {
       errorMessage =
         "❌ Le bot ne peut pas modifier le propriétaire du serveur.";
-    } else if (error.message === "MEMBER_IS_BOT") {
+    } else if (!error?.publicMessage && error.message === "MEMBER_IS_BOT") {
       errorMessage =
         "❌ Les points d'un bot ne peuvent pas être modifiés.";
-    } else if (
+    } else if (!error?.publicMessage && (
       error.message === "MEMBER_NOT_MANAGEABLE"
-    ) {
+    )) {
       errorMessage =
         "❌ Le rôle du bot doit être placé au-dessus des rôles du policier.";
-    } else if (error.code === 50013) {
+    } else if (!error?.publicMessage && error.code === 50013) {
       errorMessage =
         "❌ Le bot n'a pas la permission de gérer ce rôle.";
-    } else if (error.code === 10011) {
+    } else if (!error?.publicMessage && error.code === 10011) {
       errorMessage =
         "❌ Un identifiant de rôle dans le fichier .env est incorrect.";
-    } else if (error.code === 10003) {
+    } else if (!error?.publicMessage && error.code === 10003) {
       errorMessage =
         "❌ Un identifiant de salon dans le fichier .env est incorrect.";
     }

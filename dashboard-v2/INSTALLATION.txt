@@ -1,37 +1,14 @@
-INSTALLATION HMPD DASHBOARD PRO
+INSTALLATION HMPD V6
 
-1. Arrête l'ancien Dashboard avec Ctrl + C.
+1. Conserve ton fichier .env / tes Environment Variables Render.
+2. Vérifie dashboard-v2/ENV-A-AJOUTER.txt.
+3. Dans PowerShell :
+   npm install
+   npm run verify
+   npm start
+4. Pour enregistrer/recharger les slash commands si nécessaire :
+   node deploy-commands.js
 
-2. Sauvegarde l'ancien dossier :
-   cd E:\hmpd-points-bot
-   Rename-Item dashboard-v2 dashboard-v2-backup
+Sur Render, la commande de démarrage reste : npm start
 
-3. Décompresse ce ZIP.
-
-4. Copie le dossier hmpd-dashboard-pro dans :
-   E:\hmpd-points-bot
-
-5. Renomme-le en :
-   dashboard-v2
-
-6. Installe les dépendances :
-   npm install express express-session helmet express-rate-limit
-
-7. Vérifie les variables dans .env avec ENV-A-AJOUTER.txt.
-
-8. Lance :
-   node dashboard-v2\server.js
-
-9. Ouvre :
-   http://localhost:3001
-
-Le projet ajoute :
-- Graphiques
-- Journal d'activité
-- Dossiers policiers
-- Notes
-- Sanctions
-- Historique
-- Ajout/retrait de points
-- OAuth Discord facultatif
-- Contrôle du rôle High Command
+Le dashboard V6 utilise un cache-busting automatique dans les URLs CSS/JS ; après un nouveau déploiement, un simple rechargement doit suffire dans la majorité des cas.
