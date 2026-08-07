@@ -16,6 +16,7 @@ const extrasRoutes = require("./routes/extras");
 const attendanceRoutes = require("./routes/attendance");
 const realtimeRoutes = require("./routes/realtime");
 const managementRoutes = require("./routes/management");
+const promotionRoutes = require("./routes/promotions");
 const { actionDedupe } = require("./middlewares/idempotency");
 const { clientCount, closeAll: closeRealtimeClients } = require("./services/realtimeService");
 const { pool, ready: databaseReady, closeDatabase } = require("../database");
@@ -269,7 +270,7 @@ app.get(
     return response.status(healthy ? 200 : 503).json({
       success: healthy,
       status: healthy ? "online" : "degraded",
-      version: "3.0.0",
+      version: "4.0.0",
       dashboard: "HMPD Dashboard Pro",
       oauthEnabled,
       database,
@@ -402,6 +403,7 @@ app.use(
 );
 
 app.use("/api/management", managementRoutes);
+app.use("/api/promotions", promotionRoutes);
 
 /* =========================================================
    ROUTES INTROUVABLES

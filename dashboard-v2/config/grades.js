@@ -114,6 +114,12 @@ function getDiscordGradeFromRoles(roles) {
   return match?.name || null;
 }
 
+
+function getNextGradeByName(name) {
+  const index = getGradeIndex(name);
+  return index >= 0 ? GRADES[index + 1] || null : null;
+}
+
 function getDisplayGradeOrder() {
   return GRADES.map((grade) => grade.name);
 }
@@ -123,6 +129,7 @@ module.exports = {
   DISCORD_DISPLAY_GRADES,
   getGradeFromPoints,
   getNextGrade,
+  getNextGradeByName,
   getGradeProgress,
   getPublicGradeRequirements,
   getAllGradeRoleIds,

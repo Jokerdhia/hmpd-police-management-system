@@ -50,11 +50,13 @@ async function getManagementSnapshot(){
     o && o.is_in_server === true && o.has_police_role === true
   );
 
+  const promotionRows=(await pool.query(`SELECT DISTINCT ON (user_id) user_id,status,to_grade FROM promotion_cases ORDER BY user_id,id DESC`).catch(()=>({rows:[]}))).rows;
+  const promotionMap=new Map(promotionRows.map(r=>[String(r.user_id),r]));
   const now=Date.now();
   const officers=activePoliceOfficers.map(o=>{
     const inactiveDays=o.last_service?Math.floor((now-new Date(o.last_service).getTime())/86400000):999;
-    const eligible=Number(o.points)>=Number(o.next_grade_points||Infinity)-0 && Number(o.active_sanctions)===0 && Number(o.week_seconds)>=8*3600;
-    return {...o,inactive_days:inactiveDays,promotion_eligible:Boolean(o.next_grade&&eligible)};
+    const promotion=promotionMap.get(String(o.user_id));
+    return {...o,inactive_days:inactiveDays,promotion_status:promotion?.status||'progress',promotion_eligible:promotion?.status==='eligible',next_grade:promotion?.to_grade||o.next_grade};
   });
   const alerts=[];
   for(const o of officers){

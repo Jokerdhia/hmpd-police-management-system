@@ -680,29 +680,13 @@ async function modifyPoints({
     moderatorId: interaction.user.id,
   });
 
-  // Toujours dériver les grades du résultat réellement validé en base.
-  const oldGrade = getGradeFromPoints(databaseResult.oldPoints);
-  const newGrade = getGradeFromPoints(databaseResult.newPoints);
-
-  let roleSyncWarning = null;
-
-  try {
-    await synchronizeMemberGrade(
-      member,
-      databaseResult.newPoints,
-      true
-    );
-  } catch (roleError) {
-    // Les points restent enregistrés : on évite d'écraser une éventuelle
-    // modification concurrente. /syncgrade permet de corriger le rôle ensuite.
-    roleSyncWarning =
-      "⚠️ Les points ont été enregistrés, mais le rôle Discord n’a pas pu être synchronisé. Utilise /syncgrade.";
-
-    console.error(
-      `❌ Synchronisation du rôle impossible pour ${user.id} :`,
-      roleError?.message || roleError
-    );
-  }
+  // Les points représentent uniquement l'activité. Le grade Discord ne change
+  // jamais lors d'un ajout/retrait de points : toute promotion passe par le High Command.
+  const currentGrade = GRADES.find((grade) => grade.roleId && member.roles.cache.has(grade.roleId))
+    || GRADES.find((grade) => grade.name === databaseResult.grade)
+    || GRADES[0];
+  const oldGrade = currentGrade;
+  const newGrade = currentGrade;
 
   await sendPointsLog({
     guild: interaction.guild,
@@ -717,9 +701,6 @@ async function modifyPoints({
     newGrade,
   });
 
-  const nextGrade = getNextGrade(
-    databaseResult.newPoints
-  );
 
   const embed = new EmbedBuilder()
     .setColor(
@@ -771,9 +752,7 @@ async function modifyPoints({
       }
     )
     .setFooter({
-      text: nextGrade
-        ? `${nextGrade.points - databaseResult.newPoints} point(s) avant ${nextGrade.name}`
-        : "Grade maximum atteint",
+      text: "Les points mesurent l'activité • Promotion sur validation High Command",
     })
     .setTimestamp();
 
@@ -808,8 +787,7 @@ client.once(Events.ClientReady, async () => {
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
   console.log("✅ Base Neon PostgreSQL connectée.");
-  console.log("✅ Promotions automatiques actives.");
-  console.log("✅ Rétrogradations automatiques actives.");
+  console.log("✅ Promotions automatiques désactivées — validation High Command active.");
   console.log("✅ Logs automatiques actifs.");
   console.log(`📊 Policiers enregistrés : ${await countOfficers()}`);
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -1216,61 +1194,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     */
 
     if (interaction.commandName === "syncgrade") {
-      if (!isHighCommand(interaction)) {
-        await interaction.reply(
-          privateReply(
-            "❌ Cette commande est réservée au High Command."
-          )
-        );
-
-        return;
-      }
-
-      const user = interaction.options.getUser(
-        "membre",
-        true
-      );
-
-      await interaction.deferReply({
-        flags: MessageFlags.Ephemeral,
-      });
-
-      const member =
-        await interaction.guild.members.fetch(user.id);
-
-      verifyMemberCanBeManaged(member);
-
-      const officer = await getOfficer(user.id);
-
-      const result = await synchronizeMemberGrade(
-        member,
-        Number(officer.points),
-        false
-      );
-
-      const embed = new EmbedBuilder()
-        .setColor(0x3498db)
-        .setTitle("🔄 Grade synchronisé")
-        .setDescription(
-          [
-            `👤 **Policier :** ${member}`,
-            `⭐ **Points :** ${officer.points}`,
-            `🎖️ **Rôle attribué :** ${result.newGrade.name}`,
-            "",
-            result.changed
-              ? "✅ Le rôle Discord a été corrigé."
-              : "✅ Le rôle Discord était déjà correct.",
-          ].join("\n")
-        )
-        .setTimestamp();
-
-      await interaction.editReply({
-        embeds: [embed],
-        allowedMentions: {
-          parse: [],
-        },
-      });
-
+      await interaction.reply(privateReply(
+        "🔒 /syncgrade est désactivée : les grades ne dépendent plus des points. Utilise le Centre des promotions du dashboard High Command pour valider une promotion."
+      ));
       return;
     }
   } catch (error) {

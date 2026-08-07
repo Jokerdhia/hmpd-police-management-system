@@ -1,12 +1,12 @@
 {
   "name": "hmpd-police-management-system",
-  "version": "3.0.2",
+  "version": "4.0.0",
   "main": "start-render.js",
   "scripts": {
     "start": "node start-render.js",
     "bot": "node index.js",
     "dashboard": "node dashboard-v2/server.js",
-    "check": "node --check index.js && node --check start-render.js && node --check database.js && node --check dashboard-v2/server.js && node --check dashboard-v2/dashboardDatabase.js && node --check dashboard-v2/services/officerService.js && node --check dashboard-v2/services/discordService.js && node --check dashboard-v2/services/realtimeService.js && node --check dashboard-v2/middlewares/idempotency.js && node --check dashboard-v2/services/managementService.js && node --check dashboard-v2/routes/management.js && node --check dashboard-v2/services/weeklyReportService.js"
+    "check": "node --check index.js && node --check start-render.js && node --check database.js && node --check dashboard-v2/server.js && node --check dashboard-v2/dashboardDatabase.js && node --check dashboard-v2/services/officerService.js && node --check dashboard-v2/services/discordService.js && node --check dashboard-v2/services/realtimeService.js && node --check dashboard-v2/middlewares/idempotency.js && node --check dashboard-v2/services/managementService.js && node --check dashboard-v2/routes/management.js && node --check dashboard-v2/services/weeklyReportService.js && node --check dashboard-v2/config/promotionRequirements.js && node --check dashboard-v2/services/promotionService.js && node --check dashboard-v2/routes/promotions.js && node --check dashboard-v2/public/js/management.js && node --check dashboard-v2/public/js/dashboard.js && node --check dashboard-v2/routes/extras.js"
   },
   "engines": {
     "node": ">=20.0.0 <25.0.0"

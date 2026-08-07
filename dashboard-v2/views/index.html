@@ -197,12 +197,12 @@
         <div class="stats-grid management-stats">
           <article class="stat-card"><div class="stat-icon">🟢</div><div><span>En service</span><strong id="mgOnDuty">0</strong></div></article>
           <article class="stat-card"><div class="stat-icon">📈</div><div><span>Score moyen</span><strong id="mgAverageScore">0</strong></div></article>
-          <article class="stat-card"><div class="stat-icon">🎖️</div><div><span>Promotions suggérées</span><strong id="mgPromotions">0</strong></div></article>
+          <article class="stat-card"><div class="stat-icon">🎖️</div><div><span>Éligibles promotion</span><strong id="mgPromotions">0</strong></div></article>
           <article class="stat-card"><div class="stat-icon">⚠️</div><div><span>Inactifs 7j+</span><strong id="mgInactive">0</strong></div></article>
         </div>
         <div class="dashboard-grid">
           <article class="panel"><div class="panel-head"><div><h2>Alertes intelligentes</h2><p>Éléments nécessitant une vérification</p></div></div><div id="managementAlerts" class="management-list"></div></article>
-          <article class="panel"><div class="panel-head"><div><h2>Promotions</h2><p>Suggestions basées sur points, présence et discipline</p></div></div><div id="managementPromotions" class="management-list"></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Centre des promotions</h2><p>Progression, éligibilité et validation finale High Command</p></div></div><div id="promotionStatusTabs" class="promotion-tabs"><button data-promo-filter="all" class="active">Tous</button><button data-promo-filter="eligible">Éligibles</button><button data-promo-filter="evaluation">Évaluation</button><button data-promo-filter="frozen">Gelées</button></div><div id="managementPromotions" class="management-list"></div></article>
         </div>
         <article class="panel panel-spaced"><div class="panel-head panel-head-responsive"><div><h2>Performance des policiers</h2><p>Score transparent sur 100 — aide à la décision uniquement</p></div><input id="managementSearch" class="search" type="search" placeholder="Rechercher un policier..."></div><div class="table-scroll"><table><thead><tr><th>Policier</th><th>Grade</th><th>Score</th><th>Service semaine</th><th>Discipline</th><th>Dernier service</th><th></th></tr></thead><tbody id="managementOfficerRows"></tbody></table></div></article>
         <article class="panel panel-spaced"><div class="panel-head"><div><h2>Couverture horaire — 30 jours</h2><p>Nombre de policiers distincts ayant commencé un service par heure</p></div></div><div id="coverageGrid" class="coverage-grid"></div></article>
@@ -269,6 +269,17 @@
           <button type="submit" class="btn btn-primary" id="submitRecordButton">Enregistrer</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div class="modal hidden" id="promotionModal">
+    <div class="modal-backdrop" data-close-promotion></div>
+    <div class="modal-card promotion-modal-card">
+      <header class="modal-head">
+        <div><p class="eyebrow">HMPD • OFFICIAL PROMOTION SYSTEM</p><h2 id="promotionModalTitle">Dossier de promotion</h2><p id="promotionModalSubtitle"></p></div>
+        <button class="icon-btn" id="closePromotionButton">✕</button>
+      </header>
+      <div id="promotionModalContent"></div>
     </div>
   </div>
 

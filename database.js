@@ -200,13 +200,15 @@ async function changeOfficerPoints({ userId, action, amount, grade, reason, mode
   try {
     await client.query("BEGIN");
     await ensureOfficer(client, safeUserId);
-    const current = await client.query("SELECT points FROM officers WHERE user_id=$1 FOR UPDATE", [safeUserId]);
+    const current = await client.query("SELECT points, grade FROM officers WHERE user_id=$1 FOR UPDATE", [safeUserId]);
     const oldPoints = Number(current.rows[0]?.points || 0);
+    const authoritativeGrade = normalizeGrade(current.rows[0]?.grade || "Academy");
     const actualAmount = safeAction === "remove" ? Math.min(safeAmount, oldPoints) : safeAmount;
     const newPoints = safeAction === "add" ? oldPoints + actualAmount : oldPoints - actualAmount;
-    const authoritativeGrade = getGradeFromPoints(newPoints)?.name || "Academy";
 
-    await client.query("UPDATE officers SET points=$2, grade=$3, updated_at=CURRENT_TIMESTAMP WHERE user_id=$1", [safeUserId, newPoints, authoritativeGrade]);
+    // Les points représentent désormais l'activité uniquement.
+    // Le grade ne change que lorsqu'une promotion est approuvée par le High Command.
+    await client.query("UPDATE officers SET points=$2, updated_at=CURRENT_TIMESTAMP WHERE user_id=$1", [safeUserId, newPoints]);
     if (!(safeAction === "remove" && actualAmount === 0)) {
       await client.query(
         `INSERT INTO points_history (user_id, action, amount, old_points, new_points, reason, moderator_id) VALUES ($1,$2,$3,$4,$5,$6,$7)`,

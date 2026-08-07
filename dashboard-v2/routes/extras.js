@@ -6,6 +6,8 @@ const {
   addNote,
   listSanctions,
   addSanction,
+  updateSanctionStatus,
+  deleteSanction,
   listActivity,
 } = require("../dashboardDatabase");
 
@@ -263,6 +265,41 @@ router.post(
       error.publicMessage = error.publicMessage || error.message;
       return next(error);
     }
+  }
+);
+
+router.patch(
+  "/officers/:userId/sanctions/:id",
+  requireHighCommand,
+  async (request, response, next) => {
+    try {
+      const userId = normalizeDiscordId(request.params.userId, "Identifiant du policier");
+      const status = String(request.body?.status || "").trim().toLowerCase();
+      const result = await updateSanctionStatus(request.params.id, status);
+      if (!result.updated) {
+        const error = new Error("Sanction introuvable."); error.status = 404; error.publicMessage = error.message; throw error;
+      }
+      broadcast("sanction-changed", { userId });
+      await audit({actorId:getModeratorId(request),action:"sanction.status",targetId:userId,details:{sanctionId:request.params.id,status}}).catch(()=>{});
+      return response.json({success:true,message:"Statut de la sanction mis à jour.",result});
+    } catch (error) { error.publicMessage=error.publicMessage||error.message; return next(error); }
+  }
+);
+
+router.delete(
+  "/officers/:userId/sanctions/:id",
+  requireHighCommand,
+  async (request, response, next) => {
+    try {
+      const userId = normalizeDiscordId(request.params.userId, "Identifiant du policier");
+      const result = await deleteSanction(request.params.id);
+      if (!result.deleted) {
+        const error = new Error("Sanction introuvable."); error.status = 404; error.publicMessage = error.message; throw error;
+      }
+      broadcast("sanction-changed", { userId });
+      await audit({actorId:getModeratorId(request),action:"sanction.delete",targetId:userId,details:{sanctionId:request.params.id}}).catch(()=>{});
+      return response.json({success:true,message:"Sanction supprimée.",result});
+    } catch (error) { error.publicMessage=error.publicMessage||error.message; return next(error); }
   }
 );
 

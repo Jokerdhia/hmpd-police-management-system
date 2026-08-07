@@ -9,6 +9,7 @@ const {
 const {
   getGradeFromPoints,
   getNextGrade,
+  getNextGradeByName,
   getGradeProgress,
   getGradeIndex,
   getDiscordGradeFromRoles,
@@ -144,12 +145,22 @@ async function enrichOfficer(officer) {
   );
 
   const points = Number(officer.points) || 0;
-  const nextGrade = getNextGrade(points);
-  const gradeProgress = getGradeProgress(points);
   const discordGrade = getDiscordGradeFromRoles(discordMember.roles);
   const displayedGrade = normalizeGradeName(
-    discordGrade || officer.grade || getGradeFromPoints(points).name
+    discordGrade || officer.grade || "Academy"
   );
+  const nextGrade = getNextGradeByName(displayedGrade);
+  // Conservé pour compatibilité d'affichage : les points sont un score d'activité,
+  // ils ne déterminent plus le grade ni une promotion automatique.
+  const gradeProgress = {
+    currentGrade: displayedGrade,
+    currentGradePoints: 0,
+    nextGrade: nextGrade?.name || null,
+    nextGradePoints: null,
+    pointsRemaining: 0,
+    progressPercent: 0,
+    isMaximum: !nextGrade,
+  };
 
   return {
     ...officer,
@@ -538,158 +549,50 @@ async function modifyOfficerPoints({
   const safeAction = normalizeAction(action);
   const safeAmount = normalizeAmount(amount);
   const safeReason = normalizeReason(reason);
-  const safeModeratorId = normalizeModeratorId(
-    moderatorId
-  );
+  const safeModeratorId = normalizeModeratorId(moderatorId);
 
-  /*
-   * Vérifie le membre directement auprès de Discord.
-   */
-  const discordMember = await getDiscordMember(
-    safeUserId,
-    true
-  );
-
-  if (!discordMember.found) {
-    throw new Error(
-      "Ce policier n'est plus présent dans le serveur."
-    );
+  const discordMember = await getDiscordMember(safeUserId, true);
+  if (!discordMember.found) throw new Error("Ce policier n'est plus présent dans le serveur.");
+  if (discordMember.bot) throw new Error("Les points d'un bot ne peuvent pas être modifiés.");
+  if (POLICE_ROLE_IDS.length > 0 && !hasPoliceRole(discordMember)) {
+    throw new Error("Ce membre ne possède plus le rôle Police.");
   }
 
-  if (discordMember.bot) {
-    throw new Error(
-      "Les points d'un bot ne peuvent pas être modifiés."
-    );
-  }
+  // IMPORTANT : les points sont désormais uniquement un indicateur d'activité.
+  // Aucune modification de points ne change le rôle ou le grade Discord.
+  const before = await getOfficerProfile(safeUserId);
+  const currentGradeName = normalizeGradeName(before.grade || "Academy");
+  const currentGrade = GRADES.find((g) => g.name === currentGradeName) || { name: currentGradeName };
 
-  /*
-   * Le rôle Police est obligatoire.
-   */
-  if (
-    POLICE_ROLE_IDS.length > 0 &&
-    !hasPoliceRole(discordMember)
-  ) {
-    throw new Error(
-      "Ce membre ne possède plus le rôle Police."
-    );
-  }
-
-  /*
-   * La base calcule le total et le grade de façon atomique.
-   * On synchronise ensuite Discord à partir du résultat réellement enregistré.
-   */
   const result = await changeOfficerPoints({
     userId: safeUserId,
     action: safeAction,
     amount: safeAmount,
-    grade: "AUTO",
+    grade: currentGradeName,
     reason: safeReason,
     moderatorId: safeModeratorId,
   });
 
-  const oldGrade = getGradeFromPoints(result.oldPoints);
-  const newGrade = getGradeFromPoints(result.newPoints);
-
-  if (!oldGrade?.name || !oldGrade?.roleId) {
-    throw new Error("L'ancien grade est mal configuré.");
-  }
-
-  if (!newGrade?.name || !newGrade?.roleId) {
-    throw new Error("Le nouveau grade est mal configuré.");
-  }
-
-  let roleSyncWarning = null;
-
-  try {
-    await setMemberGradeRole(
-      safeUserId,
-      newGrade.roleId
-    );
-  } catch (error) {
-    roleSyncWarning =
-      "Les points sont enregistrés, mais le rôle Discord n’a pas pu être synchronisé.";
-
-    console.error(
-      `❌ Impossible de synchroniser le rôle de ${safeUserId} :`,
-      error?.message || error
-    );
-  }
-
-  const updatedMember =
-    await getDiscordMember(
-      safeUserId,
-      true
-    );
-
-  /*
-   * Une erreur de log ne doit pas annuler la modification.
-   */
   await logPointsChange({
-    member: updatedMember,
+    member: discordMember,
     action: safeAction,
     result,
     reason: safeReason,
-    oldGrade,
-    newGrade,
+    oldGrade: currentGrade,
+    newGrade: currentGrade,
     moderatorId: safeModeratorId,
-  }).catch((error) => {
-    console.error(
-      "❌ Impossible d'envoyer le journal Discord :",
-      error?.message || error
-    );
-  });
-
-  const oldGradeIndex =
-    getGradeIndex(oldGrade.name);
-
-  const newGradeIndex =
-    getGradeIndex(newGrade.name);
-
-  const isPromotion =
-    newGradeIndex > oldGradeIndex;
-
-  const isDemotion =
-    newGradeIndex < oldGradeIndex;
-
-  if (isPromotion) {
-    await sendPromotionMessage({
-      userId: safeUserId,
-      oldGrade,
-      newGrade,
-      newPoints: result.newPoints,
-    }).catch((error) => {
-      console.error(
-        "❌ Impossible d'envoyer le message de promotion :",
-        error?.message || error
-      );
-    });
-  }
-
-  if (isDemotion) {
-    await sendDemotionMessage({
-      userId: safeUserId,
-      oldGrade,
-      newGrade,
-      newPoints: result.newPoints,
-    }).catch((error) => {
-      console.error(
-        "❌ Impossible d'envoyer le message de rétrogradation :",
-        error?.message || error
-      );
-    });
-  }
+  }).catch((error) => console.error("❌ Impossible d'envoyer le journal Discord :", error?.message || error));
 
   invalidateOfficerCache();
-
   return {
     result,
-    officer:
-      await getOfficerProfile(safeUserId),
-    oldGrade,
-    newGrade,
-    promoted: isPromotion,
-    demoted: isDemotion,
-    roleSyncWarning,
+    officer: await getOfficerProfile(safeUserId),
+    oldGrade: currentGrade,
+    newGrade: currentGrade,
+    promoted: false,
+    demoted: false,
+    roleSyncWarning: null,
+    promotionManagedByHighCommand: true,
   };
 }
 
