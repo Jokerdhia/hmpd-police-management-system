@@ -323,15 +323,49 @@ async function getOfficerProfile(userId) {
   const safeUserId = normalizeUserId(userId);
   const officer = await getOfficer(safeUserId);
 
-  const [enriched, attendance] = await Promise.all([
-    enrichOfficer(officer),
-    getOfficerAttendanceTotal(safeUserId),
-  ]);
+  if (!officer) {
+    const error = new Error("Dossier policier introuvable.");
+    error.status = 404;
+    error.publicMessage = error.message;
+    throw error;
+  }
+
+  let enriched;
+  try {
+    enriched = await enrichOfficer(officer);
+  } catch (error) {
+    console.error(`⚠️ Profil Discord partiel pour ${safeUserId}:`, error?.message || error);
+    const fallbackGrade = normalizeGradeName(officer.grade || "Academy");
+    const nextGrade = getNextGradeByName(fallbackGrade);
+    enriched = {
+      ...officer,
+      points: Number(officer.points) || 0,
+      grade: fallbackGrade,
+      discord_grade: null,
+      display_name: officer.display_name || safeUserId,
+      username: officer.username || safeUserId,
+      avatar_url: officer.avatar_url || "https://cdn.discordapp.com/embed/avatars/0.png",
+      is_in_server: true,
+      has_police_role: true,
+      joined_at: null,
+      next_grade: nextGrade?.name || null,
+      next_grade_points: null,
+      points_until_next_grade: 0,
+      grade_progress_percent: 0,
+    };
+  }
+
+  let attendance = { total_seconds: 0, sessions: 0 };
+  try {
+    attendance = await getOfficerAttendanceTotal(safeUserId) || attendance;
+  } catch (error) {
+    console.error(`⚠️ Total présence indisponible pour ${safeUserId}:`, error?.message || error);
+  }
 
   return {
     ...enriched,
-    total_attendance_seconds: attendance.total_seconds,
-    total_attendance_sessions: attendance.sessions,
+    total_attendance_seconds: Number(attendance.total_seconds) || 0,
+    total_attendance_sessions: Number(attendance.sessions) || 0,
   };
 }
 
