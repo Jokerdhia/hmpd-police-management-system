@@ -1,0 +1,25 @@
+HMPD V5.3.5 — HIGH GRADE ACCESS FIX
+
+Corrections principales :
+- Le ZIP précédent annonçait V5.3.4 mais exécutait encore du code 5.3.3.
+- High Grade donne maintenant un bypass complet du MDT.
+- High Grade peut entrer même sans rôle Police.
+- Toutes les capacités admin sont accordées à High Grade.
+- ROLE_HIGH_GRADE est supporté.
+- ROLE_HIGH_COMMAND reste supporté pour compatibilité.
+- Le bot détecte aussi automatiquement les rôles Discord nommés "High Grade" ou "High Command".
+- Les routes /api/me, requireAuth, requireCapability et requireHighCommand utilisent toutes la même logique.
+- Les anciennes vérifications qui exigeaient Police même pour High Grade ont été supprimées.
+
+Après mise à jour :
+1. Conserver votre fichier .env actuel.
+2. npm install
+3. npm run check
+4. npm start
+5. Se déconnecter du MDT puis se reconnecter avec Discord (important pour renouveler la session).
+6. Faire Ctrl+F5.
+
+Optionnel :
+ROLE_HIGH_GRADE=ID_DU_ROLE_HIGH_GRADE
+
+Cette variable n'est plus obligatoire si le rôle Discord s'appelle exactement High Grade.
