@@ -258,9 +258,24 @@ app.use((request, response, next) => {
 registerAuthRoutes(app);
 
 /*
- * Route utilisée par Render pour vérifier que le service
- * est démarré.
+ * Health checks Render.
+ *
+ * /healthz = liveness très légère : Render doit uniquement vérifier que le
+ * processus HTTP répond. Une panne/latence Neon temporaire ne doit surtout
+ * pas faire retirer une instance saine du load-balancer et provoquer un 502.
+ *
+ * /api/health = diagnostic complet (inclut PostgreSQL) pour l'administration.
  */
+app.get("/healthz", (request, response) => {
+  return response.status(200).json({
+    success: true,
+    status: "online",
+    service: "hmpd-dashboard",
+    uptime: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString(),
+  });
+});
+
 app.get(
   "/api/health",
   async (request, response) => {
@@ -512,6 +527,13 @@ function startServer() {
       }
     }
   );
+
+  // Réglages recommandés derrière le proxy Render. Ils évitent les sockets
+  // trop anciennes et laissent une marge correcte au proxy pendant un deploy.
+  server.keepAliveTimeout = 65 * 1000;
+  server.headersTimeout = 70 * 1000;
+  server.requestTimeout = 60 * 1000;
+  server.timeout = 0;
 
   server.on(
     "error",

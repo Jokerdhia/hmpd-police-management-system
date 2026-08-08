@@ -15,7 +15,9 @@ const pool = new Pool({
   ssl: DATABASE_URL.includes("localhost") ? false : undefined,
   max: Number.parseInt(process.env.DATABASE_POOL_MAX, 10) || 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
+  connectionTimeoutMillis: Number.parseInt(process.env.DATABASE_CONNECTION_TIMEOUT_MS, 10) || 8000,
+  keepAlive: true,
+  allowExitOnIdle: false,
   statement_timeout: Number.parseInt(process.env.DATABASE_STATEMENT_TIMEOUT_MS, 10) || 15000,
   application_name: "hmpd-v6",
 });

@@ -20,3 +20,66 @@
 
 /* V7.3 — Command Center live activity */
 .command-live{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--muted);font-size:12px}.command-live small{width:100%;text-align:right;color:var(--muted)}.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 10px rgba(46,209,122,.8);animation:commandPulse 1.8s ease-in-out infinite}.command-activity-list{display:grid}.command-activity-row{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:14px;align-items:center;padding:15px 18px;border-bottom:1px solid var(--line)}.command-activity-row:last-child{border-bottom:0}.command-activity-icon{width:38px;height:38px;border:1px solid var(--line);background:var(--panel-2);border-radius:11px;display:grid;place-items:center}.command-activity-main{min-width:0}.command-activity-main strong,.command-activity-main span,.command-activity-main small{display:block}.command-activity-main strong{font-size:14px}.command-activity-main span{margin-top:2px;color:#cfe1f7;font-size:13px}.command-activity-main small{margin-top:3px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.command-activity-side{text-align:right;display:grid;gap:4px;justify-items:end}.command-activity-side time{color:var(--muted);font-size:11px}.command-activity-side strong{font-size:13px}.management-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.management-hero{overflow:hidden}.toast.error:empty{display:none!important}@keyframes commandPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.45;transform:scale(.78)}}@media(max-width:1100px){.management-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:700px){.management-stats{grid-template-columns:1fr}.command-activity-row{grid-template-columns:38px minmax(0,1fr)}.command-activity-side{grid-column:2;text-align:left;justify-items:start}.command-live small{text-align:left}}
+
+
+/* V7.1 — Command Center navigation: critical, standalone and cache-safe */
+#managementPage .command-tabs{
+  display:grid!important;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+  margin:0 0 16px;
+  padding:7px;
+  border:1px solid #203448;
+  border-radius:10px;
+  background:#09131d;
+}
+#managementPage .command-tabs button{
+  appearance:none;
+  -webkit-appearance:none;
+  min-width:0;
+  min-height:58px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  margin:0;
+  border:1px solid #21384d;
+  border-radius:7px;
+  background:#0c1823;
+  color:#8fa5bc;
+  font:inherit;
+  text-align:left;
+  cursor:pointer;
+  box-shadow:none;
+  transition:background .15s ease,border-color .15s ease,transform .15s ease;
+}
+#managementPage .command-tabs button:hover{background:#102131;border-color:#31516d;transform:translateY(-1px)}
+#managementPage .command-tabs button.active{background:#143451;border-color:#4b84b7;box-shadow:inset 0 0 0 1px rgba(92,160,218,.10)}
+#managementPage .command-tabs button>span{display:grid;place-items:center;width:29px;height:29px;flex:0 0 29px;border-radius:6px;background:#10263a;color:#77b9f2;font-size:15px}
+#managementPage .command-tabs button div{min-width:0;display:flex;flex-direction:column;gap:2px}
+#managementPage .command-tabs button strong{display:block;color:#dce8f3;font-size:12px;line-height:1.15;white-space:nowrap}
+#managementPage .command-tabs button small{display:block;color:#71889f;font-size:9px;line-height:1.15;white-space:nowrap}
+#managementPage .command-tabs button.active strong{color:#fff}
+#managementPage .command-tabs button.active small{color:#a9c9e5}
+#managementPage .command-tab-panel{display:none!important}
+#managementPage .command-tab-panel.active{display:block!important}
+#managementPage .command-summary-grid{grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-bottom:14px}
+#managementPage .command-summary-grid .stat-card{min-height:88px;padding:13px}
+#managementPage .command-overview-grid{grid-template-columns:minmax(0,1.25fr) minmax(340px,.75fr);gap:14px}
+#managementPage .command-scroll-list{max-height:390px;overflow:auto;scrollbar-width:thin}
+#managementPage .command-table-scroll{max-height:65vh;overflow:auto}
+#managementPage .command-report-box{max-height:58vh;overflow:auto}
+#managementPage .command-audit-grid{grid-template-columns:minmax(320px,.8fr) minmax(0,1.2fr);gap:14px}
+#managementPage .command-audit-grid .panel{min-height:0}
+#managementPage .command-activity-list{max-height:58vh}
+@media(max-width:1200px){
+  #managementPage .command-tabs{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #managementPage .command-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  #managementPage .command-overview-grid,#managementPage .command-audit-grid{grid-template-columns:1fr}
+}
+@media(max-width:700px){
+  #managementPage .command-tabs{grid-template-columns:1fr 1fr}
+  #managementPage .command-tabs button{min-height:50px;padding:8px}
+  #managementPage .command-tabs button small{display:none}
+  #managementPage .command-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}

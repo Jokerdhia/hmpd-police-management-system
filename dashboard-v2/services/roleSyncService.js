@@ -25,6 +25,7 @@ const POLICE_ROLE_IDS = String(process.env.ROLE_POLICE || "")
 let running = false;
 let syncTimer = null;
 let lastMaintenanceAt = 0;
+let unchangedSyncCount = 0;
 
 function getMemberRoles(member) {
   return Array.isArray(member?.roles)
@@ -169,10 +170,17 @@ async function syncPoliceRoles() {
 
     invalidateOfficerCache();
 
-    console.log(
-      `✅ Synchronisation Police : ${policeMembers.length} actif(s), ` +
-      `${addedCount} ajouté(s), ${gradeSyncedCount} grade(s) synchronisé(s) (points cumulés protégés), ${deletedCount} supprimé(s) de la base.`
-    );
+    const hasChanges = addedCount > 0 || gradeSyncedCount > 0 || deletedCount > 0;
+    unchangedSyncCount += 1;
+    // Évite de saturer les logs Render : on affiche toujours les changements,
+    // sinon seulement un état périodique (toutes les 10 synchronisations).
+    if (hasChanges || unchangedSyncCount >= 10) {
+      console.log(
+        `✅ Synchronisation Police : ${policeMembers.length} actif(s), ` +
+        `${addedCount} ajouté(s), ${gradeSyncedCount} grade(s) synchronisé(s) (points cumulés protégés), ${deletedCount} supprimé(s) de la base.`
+      );
+      unchangedSyncCount = 0;
+    }
   } catch (error) {
     console.error(
       "❌ Synchronisation des policiers impossible :",
@@ -193,7 +201,7 @@ function startRoleSync() {
   );
 
   const interval = Number.isFinite(configuredInterval)
-    ? Math.max(configuredInterval, 30000)
+    ? Math.max(configuredInterval, 60000)
     : 60000;
 
   syncPoliceRoles();

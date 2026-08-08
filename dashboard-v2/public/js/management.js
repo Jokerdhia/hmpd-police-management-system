@@ -5,6 +5,31 @@
   const dur=s=>`${Math.floor(Number(s||0)/3600)}h ${String(Math.floor(Number(s||0)%3600/60)).padStart(2,'0')}m`;
   const dt=v=>v?new Date(v).toLocaleString('fr-FR'):'Jamais';
   let data=null,promotions=[],permissions={},promoFilter='eligible',promoPageFilter='all',promoSearch='',promoPage=1,promoPageSize=12,selectedPromotionUser=null,managementTimer=null,notifyTimer=null;
+  function activateCommandTab(tab){
+    const valid=['overview','officers','planning','audit'];
+    const target=valid.includes(tab)?tab:'overview';
+    $$('#commandTabs [data-command-tab]').forEach(b=>{
+      const active=b.dataset.commandTab===target;
+      b.classList.toggle('active',active);
+      b.setAttribute('aria-selected',active?'true':'false');
+    });
+    $$('[data-command-panel]').forEach(p=>p.classList.toggle('active',p.dataset.commandPanel===target));
+    try{sessionStorage.setItem('hmpdCommandTab',target)}catch{}
+  }
+  function bindCommandTabs(){
+    const tabs=$('#commandTabs');
+    if(!tabs||tabs.dataset.bound==='1')return;
+    tabs.dataset.bound='1';
+    tabs.addEventListener('click',e=>{
+      const b=e.target.closest('[data-command-tab]');
+      if(!b)return;
+      e.preventDefault();
+      activateCommandTab(b.dataset.commandTab);
+    });
+    let saved='overview';try{saved=sessionStorage.getItem('hmpdCommandTab')||'overview'}catch{}
+    activateCommandTab(saved);
+  }
+  bindCommandTabs();
 
   async function req(url,options={}){
     const init={cache:'no-store',...options};
@@ -198,14 +223,14 @@
       const nav=$('#managementNav');if(permissions.canViewCommandCenter)nav?.classList.remove('hidden');nav?.addEventListener('click',()=>{document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));nav.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('#managementPage')?.classList.add('active');$('#pageTitle').textContent='Centre de commandement';$('#pageSubtitle').textContent='Performance, alertes et audit High Command';load()});
       const promoNav=$('#promotionsNav');if(permissions.canManagePromotions)promoNav?.classList.remove('hidden');promoNav?.addEventListener('click',()=>{document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));promoNav.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('#promotionsPage')?.classList.add('active');$('#pageTitle').textContent='Promotions';$('#pageSubtitle').textContent='Dossiers de carrière et validation High Command';load()});
       $('#managementRefresh')?.addEventListener('click',load);$('#promotionsRefresh')?.addEventListener('click',load);$('#managementSearch')?.addEventListener('input',e=>render(e.target.value));$('#copyWeeklyReport')?.addEventListener('click',()=>navigator.clipboard?.writeText($('#weeklyReport').textContent));
-      $('#commandTabs')?.addEventListener('click',e=>{const b=e.target.closest('[data-command-tab]');if(!b)return;const tab=b.dataset.commandTab;$$('#commandTabs [data-command-tab]').forEach(x=>x.classList.toggle('active',x===b));$$('[data-command-panel]').forEach(x=>x.classList.toggle('active',x.dataset.commandPanel===tab));});
+      bindCommandTabs();
       $('#promotionStatusTabs')?.addEventListener('click',e=>{const b=e.target.closest('[data-promo-filter]');if(!b)return;promoFilter=b.dataset.promoFilter;$$('#promotionStatusTabs button').forEach(x=>x.classList.toggle('active',x===b));renderPromotions()});
       $('#promotionPageTabs')?.addEventListener('click',e=>{const b=e.target.closest('[data-promo-page-filter]');if(!b)return;promoPageFilter=b.dataset.promoPageFilter;promoPage=1;$$('#promotionPageTabs button').forEach(x=>x.classList.toggle('active',x===b));renderPromotions()});
       $('#promotionSearch')?.addEventListener('input',e=>{promoSearch=e.target.value.trim();promoPage=1;renderPromotions()});$('#promotionPrevPage')?.addEventListener('click',()=>{promoPage=Math.max(1,promoPage-1);renderPromotions()});$('#promotionNextPage')?.addEventListener('click',()=>{promoPage+=1;renderPromotions()});
       document.addEventListener('click',e=>{const t=e.target.closest('[data-mg-profile]');if(t)timeline(t.dataset.mgProfile);const p=e.target.closest('[data-promotion-user]');if(p)openPromotion(p.dataset.promotionUser);if(e.target.closest('[data-close-promotion],#closePromotionButton'))closePromotion();if(e.target.closest('#saveRpEvaluation'))saveEvaluation();if(e.target.closest('#addSanctionButton'))addSanction();const ss=e.target.closest('[data-sanction-status]');if(ss)sanctionStatus(ss.dataset.sanctionId,ss.dataset.sanctionStatus);const sd=e.target.closest('[data-sanction-delete]');if(sd)deleteSanctionAction(sd.dataset.sanctionDelete);const a=e.target.closest('[data-promo-action]');if(a&&!a.disabled)promotionAction(a.dataset.promoAction)});
       document.addEventListener('change',e=>{if(e.target.matches('[data-criterion-key]'))updateCriterion(e.target)});
       startManagementAutoRefresh();
-    }catch{}
+    }catch(e){console.error('[HMPD] Initialisation Command Center:',e);bindCommandTabs()}
   }
   init();
 })();
