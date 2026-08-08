@@ -257,7 +257,7 @@ router.get("/officers/:userId/sanctions", async (request, response, next) => {
 
 router.post(
   "/officers/:userId/sanctions",
-  requireCapability('canSanction','Grade Lieutenant ou High Grade requis pour gérer les sanctions.'),
+  requireHighCommand,
   requireTargetNotHigher('userId'),
   async (request, response, next) => {
     try {
@@ -310,7 +310,7 @@ router.post(
 
 router.patch(
   "/officers/:userId/sanctions/:id",
-  requireCapability('canSanction','Grade Lieutenant ou supérieur requis pour gérer les sanctions.'),
+  requireHighCommand,
   requireTargetNotHigher('userId'),
   async (request, response, next) => {
     try {
@@ -329,7 +329,7 @@ router.patch(
 
 router.delete(
   "/officers/:userId/sanctions/:id",
-  requireCapability('canSanction','Grade Lieutenant ou supérieur requis pour gérer les sanctions.'),
+  requireHighCommand,
   requireTargetNotHigher('userId'),
   async (request, response, next) => {
     try {

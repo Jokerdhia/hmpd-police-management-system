@@ -1,8 +1,10 @@
 const express=require('express');
-const {requireCapability,requireTargetNotHigher,getTargetHierarchyAccess,getModeratorId}=require('../auth/auth');
+const {requireHighCommand,requireCapability,requireTargetNotHigher,getTargetHierarchyAccess,getModeratorId}=require('../auth/auth');
 const {broadcast}=require('../services/realtimeService');
 const {getPromotionProfile,setCriterion,addRpEvaluation,setCaseStatus,approvePromotion,listPromotionCenter}=require('../services/promotionService');
 const router=express.Router();
+// Sécurité forte : le centre des promotions et toutes ses API sont réservés au rôle High Grade.
+router.use(requireHighCommand);
 router.get('/',requireCapability('canManagePromotions','Grade Captain ou supérieur requis pour le centre des promotions.'),async(req,res,next)=>{try{res.json({success:true,promotions:await listPromotionCenter(getModeratorId(req))})}catch(e){next(e)}});
 router.get('/:userId',requireCapability('canEvaluate','Grade Sergeant ou supérieur requis pour consulter ce dossier.'),async(req,res,next)=>{try{const [promotion,targetAccess]=await Promise.all([getPromotionProfile(req.params.userId,getModeratorId(req)),getTargetHierarchyAccess(req,req.params.userId)]);res.json({success:true,promotion:{...promotion,target_access:targetAccess},targetAccess})}catch(e){next(e)}});
 router.post('/:userId/criteria/:key',requireCapability('canManagePromotions','Grade Captain ou supérieur requis.'),requireTargetNotHigher('userId'),async(req,res,next)=>{try{const promotion=await setCriterion({userId:req.params.userId,key:req.params.key,completed:req.body?.completed,note:req.body?.note,actorId:getModeratorId(req)});broadcast('promotion-changed',{userId:req.params.userId});res.json({success:true,promotion})}catch(e){e.publicMessage=e.message;next(e)}});

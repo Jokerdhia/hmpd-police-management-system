@@ -218,13 +218,16 @@ function getPermissions(member) {
     isHighCommand,
     canView: canEnterMdt,
     canViewAllOfficers: isHighGrade || (hasPoliceRole && atLeast('Sergeant')),
-    canEvaluate: isHighGrade || (hasPoliceRole && atLeast('Sergeant')),
-    canSanction: isHighGrade || (hasPoliceRole && atLeast('Lieutenant')),
+    // Toute gestion administrative des dossiers est réservée au rôle Discord High Grade.
+    // Les grades Police seuls peuvent consulter selon les règles existantes, mais ne peuvent
+    // ni évaluer, ni sanctionner, ni gérer les points, ni gérer/approuver les promotions.
+    canEvaluate: isHighGrade,
+    canSanction: isHighGrade,
     canManagePoints: isHighGrade,
-    canManagePromotions: isHighGrade || (hasPoliceRole && atLeast('Captain')),
-    canApprovePromotions: isHighGrade || (hasPoliceRole && atLeast('Deputy Chief')),
+    canManagePromotions: isHighGrade,
+    canApprovePromotions: isHighGrade,
     canViewCommandCenter: isHighGrade,
-    canFullAdmin: isHighGrade || (hasPoliceRole && grade === 'Chief Police'),
+    canFullAdmin: isHighGrade,
   };
 }
 

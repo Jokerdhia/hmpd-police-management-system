@@ -224,35 +224,51 @@
       </section>
 
       <section id="managementPage" class="page">
-        <div class="management-hero">
-          <div><p class="eyebrow">HIGH COMMAND</p><h2>Centre de commandement</h2><p>Effectifs, performance, alertes, promotions et audit administratif.</p></div>
+        <div class="management-hero compact-command-hero">
+          <div><p class="eyebrow">HIGH COMMAND</p><h2>Centre de commandement</h2><p>Supervision opérationnelle et administrative.</p></div>
           <button class="btn btn-secondary" id="managementRefresh">Actualiser</button>
         </div>
-        <div class="stats-grid management-stats">
-          <article class="stat-card"><div class="stat-icon">🟢</div><div><span>En service</span><strong id="mgOnDuty">0</strong></div></article>
-          <article class="stat-card"><div class="stat-icon">📈</div><div><span>Score moyen</span><strong id="mgAverageScore">0</strong></div></article>
-          <article class="stat-card"><div class="stat-icon">🎖️</div><div><span>Éligibles promotion</span><strong id="mgPromotions">0</strong></div></article>
-          <article class="stat-card"><div class="stat-icon">⚠️</div><div><span>Inactifs 7j+</span><strong id="mgInactive">0</strong></div></article>
-          <article class="stat-card"><div class="stat-icon">⭐</div><div><span>Excellentes performances</span><strong id="mgExcellent">0</strong></div></article>
-          <article class="stat-card"><div class="stat-icon">🧭</div><div><span>À surveiller</span><strong id="mgAttention">0</strong></div></article>
-        </div>
-        <div class="dashboard-grid">
-          <article class="panel"><div class="panel-head"><div><h2>Alertes intelligentes</h2><p>Éléments nécessitant une vérification</p></div></div><div id="managementAlerts" class="management-list"></div></article>
-          <article class="panel"><div class="panel-head"><div><h2>Décisions de promotion</h2><p>Dossiers éligibles, en évaluation ou gelés nécessitant l’attention du High Command.</p></div></div><div id="promotionStatusTabs" class="promotion-tabs premium-tabs"><button data-promo-filter="eligible" class="active">Éligibles</button><button data-promo-filter="evaluation">Évaluation</button><button data-promo-filter="frozen">Gelées</button></div><div id="managementPromotions" class="management-list"></div></article>
-        </div>
-        <article class="panel panel-spaced"><div class="panel-head panel-head-responsive"><div><h2>Performance des policiers</h2><p>Score transparent sur 100 — aide à la décision uniquement</p></div><input id="managementSearch" class="search" type="search" placeholder="Rechercher un policier..."></div><div class="table-scroll"><table><thead><tr><th>Policier</th><th>Grade</th><th>Score</th><th>Service semaine</th><th>Discipline</th><th>Dernier service</th><th></th></tr></thead><tbody id="managementOfficerRows"></tbody></table></div></article>
-        <article class="panel panel-spaced"><div class="panel-head"><div><h2>Couverture horaire — 30 jours</h2><p>Nombre de policiers distincts ayant commencé un service par heure</p></div></div><div id="coverageGrid" class="coverage-grid"></div></article>
-        <div class="dashboard-grid panel-spaced">
-          <article class="panel"><div class="panel-head"><div><h2>Rapport hebdomadaire</h2><p>Synthèse prête à partager</p></div><button class="btn btn-secondary" id="copyWeeklyReport">Copier</button></div><pre id="weeklyReport" class="report-box">Chargement…</pre></article>
-          <article class="panel"><div class="panel-head"><div><h2>Audit High Command</h2><p>Qui a modifié quoi et quand</p></div></div><div id="managementAudit" class="management-list"></div></article>
-        </div>
-        <article class="panel panel-spaced command-activity-panel">
-          <div class="panel-head panel-head-responsive">
-            <div><h2>Activité récente</h2><p>Points, services, sanctions et actions administratives — mise à jour automatique.</p></div>
-            <div class="command-live"><span class="live-dot"></span><span id="managementAutoStatus">Auto · 30 s</span><small id="managementLastUpdate">—</small></div>
+
+        <nav class="command-tabs" id="commandTabs" aria-label="Catégories du centre de commandement">
+          <button type="button" class="active" data-command-tab="overview"><span>◈</span><div><strong>Vue générale</strong><small>Alertes & décisions</small></div></button>
+          <button type="button" data-command-tab="officers"><span>👮</span><div><strong>Effectifs</strong><small>Performance</small></div></button>
+          <button type="button" data-command-tab="planning"><span>◷</span><div><strong>Planification</strong><small>Couverture & rapport</small></div></button>
+          <button type="button" data-command-tab="audit"><span>🧾</span><div><strong>Journal & audit</strong><small>Traçabilité</small></div></button>
+        </nav>
+
+        <div class="command-tab-panel active" data-command-panel="overview">
+          <div class="stats-grid management-stats command-summary-grid">
+            <article class="stat-card"><div class="stat-icon">🟢</div><div><span>En service</span><strong id="mgOnDuty">0</strong></div></article>
+            <article class="stat-card"><div class="stat-icon">📈</div><div><span>Score moyen</span><strong id="mgAverageScore">0</strong></div></article>
+            <article class="stat-card"><div class="stat-icon">🎖️</div><div><span>Éligibles promotion</span><strong id="mgPromotions">0</strong></div></article>
+            <article class="stat-card"><div class="stat-icon">⚠️</div><div><span>Inactifs 7j+</span><strong id="mgInactive">0</strong></div></article>
+            <article class="stat-card"><div class="stat-icon">⭐</div><div><span>Excellentes performances</span><strong id="mgExcellent">0</strong></div></article>
+            <article class="stat-card"><div class="stat-icon">🧭</div><div><span>À surveiller</span><strong id="mgAttention">0</strong></div></article>
           </div>
-          <div id="managementRecentActivity" class="command-activity-list"><div class="empty">Chargement de l’activité…</div></div>
-        </article>
+          <div class="dashboard-grid command-overview-grid">
+            <article class="panel command-section-panel"><div class="panel-head"><div><h2>Alertes intelligentes</h2><p>Éléments nécessitant une vérification</p></div></div><div id="managementAlerts" class="management-list command-scroll-list"></div></article>
+            <article class="panel command-section-panel"><div class="panel-head"><div><h2>Décisions de promotion</h2><p>Dossiers nécessitant une décision High Command.</p></div></div><div id="promotionStatusTabs" class="promotion-tabs premium-tabs"><button data-promo-filter="eligible" class="active">Éligibles</button><button data-promo-filter="evaluation">Évaluation</button><button data-promo-filter="frozen">Gelées</button></div><div id="managementPromotions" class="management-list command-scroll-list"></div></article>
+          </div>
+        </div>
+
+        <div class="command-tab-panel" data-command-panel="officers">
+          <article class="panel command-section-panel"><div class="panel-head panel-head-responsive"><div><h2>Performance des policiers</h2><p>Recherche, score, service et discipline.</p></div><input id="managementSearch" class="search" type="search" placeholder="Rechercher un policier..."></div><div class="table-scroll command-table-scroll"><table><thead><tr><th>Policier</th><th>Grade</th><th>Score</th><th>Service semaine</th><th>Discipline</th><th>Dernier service</th><th></th></tr></thead><tbody id="managementOfficerRows"></tbody></table></div></article>
+        </div>
+
+        <div class="command-tab-panel" data-command-panel="planning">
+          <article class="panel command-section-panel"><div class="panel-head"><div><h2>Couverture horaire — 30 jours</h2><p>Nombre de policiers distincts ayant commencé un service par heure.</p></div></div><div id="coverageGrid" class="coverage-grid"></div></article>
+          <article class="panel command-section-panel panel-spaced"><div class="panel-head"><div><h2>Rapport hebdomadaire</h2><p>Synthèse prête à partager.</p></div><button class="btn btn-secondary" id="copyWeeklyReport">Copier</button></div><pre id="weeklyReport" class="report-box command-report-box">Chargement…</pre></article>
+        </div>
+
+        <div class="command-tab-panel" data-command-panel="audit">
+          <div class="dashboard-grid command-audit-grid">
+            <article class="panel command-section-panel"><div class="panel-head"><div><h2>Audit High Command</h2><p>Qui a modifié quoi et quand.</p></div></div><div id="managementAudit" class="management-list command-scroll-list audit-list-clean"></div></article>
+            <article class="panel command-section-panel command-activity-panel">
+              <div class="panel-head panel-head-responsive"><div><h2>Activité récente</h2><p>Services, points, sanctions et actions administratives.</p></div><div class="command-live"><span class="live-dot"></span><span id="managementAutoStatus">Auto · 30 s</span><small id="managementLastUpdate">—</small></div></div>
+              <div id="managementRecentActivity" class="command-activity-list command-scroll-list"><div class="empty">Chargement de l’activité…</div></div>
+            </article>
+          </div>
+        </div>
       </section>
     </main>
   </div>
