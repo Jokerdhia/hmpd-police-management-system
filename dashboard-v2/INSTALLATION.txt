@@ -1,4 +1,4 @@
-INSTALLATION HMPD V6
+INSTALLATION HMPD V7
 
 1. Conserve ton fichier .env / tes Environment Variables Render.
 2. Vérifie dashboard-v2/ENV-A-AJOUTER.txt.
@@ -11,4 +11,4 @@ INSTALLATION HMPD V6
 
 Sur Render, la commande de démarrage reste : npm start
 
-Le dashboard V6 utilise un cache-busting automatique dans les URLs CSS/JS ; après un nouveau déploiement, un simple rechargement doit suffire dans la majorité des cas.
+Le dashboard V7 utilise un cache-busting automatique dans les URLs CSS/JS ; après un nouveau déploiement, un simple rechargement doit suffire dans la majorité des cas.

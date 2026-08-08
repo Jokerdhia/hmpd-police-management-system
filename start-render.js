@@ -1,6 +1,6 @@
 require("dotenv").config();
 
-console.log("🚀 Démarrage de HMPD V6 sur Render...");
+console.log("🚀 Démarrage de HMPD V7 sur Render...");
 require("./dashboard-v2/config/validateConfig").logRuntimeConfig();
 
 // Le dashboard ouvre déjà process.env.PORT.

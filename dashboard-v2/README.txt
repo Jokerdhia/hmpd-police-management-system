@@ -2,7 +2,7 @@ HMPD MDT V6 — COMMAND CENTER
 
 Dashboard officiel HMPD : présence, activité, dossiers policiers, promotions, RP Quality, sanctions, High Command et audit.
 
-Principes V6 :
+Principes V7 :
 - Discord est la source de vérité pour le grade.
 - Les points mesurent uniquement l'activité.
 - Aucune promotion automatique par points.

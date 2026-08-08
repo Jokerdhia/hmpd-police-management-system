@@ -287,7 +287,7 @@ async function setMemberGradeRole(
     (roleId) => allGradeRoleIds.includes(roleId) && roleId !== safeExpectedRoleId
   );
 
-  // V6 : on ajoute d'abord le nouveau grade. Si Discord refuse l'ajout,
+  // V7 : on ajoute d'abord le nouveau grade. Si Discord refuse l'ajout,
   // l'ancien grade reste intact au lieu de laisser le policier sans grade.
   const newlyAdded = !currentRoles.includes(safeExpectedRoleId);
   if (newlyAdded) {

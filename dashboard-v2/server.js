@@ -22,6 +22,17 @@ const { clientCount, closeAll: closeRealtimeClients } = require("./services/real
 const { pool, ready: databaseReady, closeDatabase } = require("../database");
 const { startWeeklyReport, stopWeeklyReport } = require("./services/weeklyReportService");
 
+// Render ne doit recevoir un statut 200 qu'une fois l'initialisation PostgreSQL
+// terminée au moins une fois. Une panne DB ultérieure reste diagnostiquée via
+// /api/health sans transformer le liveness check en source de 502.
+const bootReadiness = { databaseReady: false, databaseError: null };
+databaseReady
+  .then(() => { bootReadiness.databaseReady = true; })
+  .catch((error) => {
+    bootReadiness.databaseError = error;
+    console.error("❌ Initialisation PostgreSQL impossible :", error?.message || error);
+  });
+
 const {
   oauthEnabled,
   registerAuthRoutes,
@@ -139,7 +150,7 @@ const limiter = rateLimit({
   },
 });
 
-// V6 : le rate-limit concerne l'API, pas les fichiers CSS/JS/images.
+// V7 : le rate-limit concerne l'API, pas les fichiers CSS/JS/images.
 app.use("/api", limiter);
 
 const authLimiter = rateLimit({
@@ -267,10 +278,12 @@ registerAuthRoutes(app);
  * /api/health = diagnostic complet (inclut PostgreSQL) pour l'administration.
  */
 app.get("/healthz", (request, response) => {
-  return response.status(200).json({
-    success: true,
-    status: "online",
+  const readyForTraffic = bootReadiness.databaseReady;
+  return response.status(readyForTraffic ? 200 : 503).json({
+    success: readyForTraffic,
+    status: readyForTraffic ? "online" : "starting",
     service: "hmpd-dashboard",
+    version: "7.2.1",
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
   });
@@ -297,8 +310,8 @@ app.get(
     return response.status(healthy ? 200 : 503).json({
       success: healthy,
       status: healthy ? "online" : "degraded",
-      version: "6.0.1",
-      dashboard: "HMPD V6 Command Center",
+      version: "7.2.1",
+      dashboard: "HMPD V7 Command Center",
       oauthEnabled,
       database,
       databaseLatencyMs,
@@ -512,19 +525,18 @@ function startServer() {
         "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       );
 
-      try {
-        startRoleSync();
-        startWeeklyReport();
-
-        console.log(
-          "✅ Synchronisation des rôles démarrée."
-        );
-      } catch (error) {
-        console.error(
-          "❌ Impossible de démarrer la synchronisation des rôles :",
-          error?.message || error
-        );
-      }
+      databaseReady
+        .then(() => {
+          startRoleSync();
+          startWeeklyReport();
+          console.log("✅ Synchronisation des rôles démarrée.");
+        })
+        .catch((error) => {
+          console.error(
+            "❌ Services automatiques non démarrés : PostgreSQL indisponible :",
+            error?.message || error
+          );
+        });
     }
   );
 
@@ -577,17 +589,13 @@ function shutdown(signal) {
   );
 
   try {
-    if (
-      typeof stopRoleSync ===
-      "function"
-    ) {
+    if (typeof stopRoleSync === "function") {
       stopRoleSync();
-  stopWeeklyReport();
-
-      console.log(
-        "✅ Synchronisation des rôles arrêtée."
-      );
     }
+    if (typeof stopWeeklyReport === "function") {
+      stopWeeklyReport();
+    }
+    console.log("✅ Services automatiques arrêtés.");
   } catch (error) {
     console.error(
       "❌ Erreur pendant l'arrêt de la synchronisation :",
@@ -629,6 +637,9 @@ function shutdown(signal) {
 
     process.exit(0);
   });
+
+  // Node 20+ : ferme immédiatement les sockets HTTP déjà inactifs.
+  server.closeIdleConnections?.();
 
   /*
    * Force l'arrêt si des connexions restent ouvertes.

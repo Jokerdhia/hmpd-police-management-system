@@ -35,7 +35,7 @@ function logRuntimeConfig(){
     for(const error of report.errors)console.error(`❌ CONFIG : ${error}`);
     const e=new Error(`Configuration HMPD invalide (${report.errors.length} erreur(s)).`);e.details=report.errors;throw e;
   }
-  console.log(`✅ Configuration V6 validée (${GRADES.filter(g=>g.roleId).length}/${GRADES.length} rôles de grade configurés).`);
+  console.log(`✅ Configuration V7 validée (${GRADES.filter(g=>g.roleId).length}/${GRADES.length} rôles de grade configurés).`);
   return report;
 }
 module.exports={validateRuntimeConfig,logRuntimeConfig};

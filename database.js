@@ -13,13 +13,13 @@ if (!DATABASE_URL) {
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: DATABASE_URL.includes("localhost") ? false : undefined,
-  max: Number.parseInt(process.env.DATABASE_POOL_MAX, 10) || 10,
+  max: Number.parseInt(process.env.DATABASE_POOL_MAX, 10) || 8,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: Number.parseInt(process.env.DATABASE_CONNECTION_TIMEOUT_MS, 10) || 8000,
   keepAlive: true,
   allowExitOnIdle: false,
   statement_timeout: Number.parseInt(process.env.DATABASE_STATEMENT_TIMEOUT_MS, 10) || 15000,
-  application_name: "hmpd-v6",
+  application_name: "hmpd-v7",
 });
 
 pool.on("error", (error) => {
@@ -651,7 +651,7 @@ async function deleteOfficersCompletely(userIds) {
   try {
     await client.query("BEGIN");
 
-    // V6 : si l'ancien policier a agi comme responsable sur le dossier
+    // V7 : si l'ancien policier a agi comme responsable sur le dossier
     // d'autres agents, on conserve la preuve administrative mais on retire son ID.
     const anonymize = [
       "UPDATE officer_notes SET author_id='FORMER_OFFICER' WHERE author_id = ANY($1::text[])",

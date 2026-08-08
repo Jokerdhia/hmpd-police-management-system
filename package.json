@@ -1,13 +1,13 @@
 {
   "name": "hmpd-police-management-system",
-  "version": "6.0.1",
+  "version": "7.2.1",
   "main": "start-render.js",
   "scripts": {
     "start": "node start-render.js",
     "bot": "node index.js",
     "dashboard": "node dashboard-v2/server.js",
-    "check": "node --check index.js && node --check start-render.js && node --check database.js && node --check services/attendanceService.js && node --check services/gradeChangeGuard.js && node --check services/gradePointPolicy.js && node --check dashboard-v2/server.js && node --check dashboard-v2/auth/auth.js && node --check dashboard-v2/dashboardDatabase.js && node --check dashboard-v2/config/grades.js && node --check dashboard-v2/config/validateConfig.js && node --check dashboard-v2/services/officerService.js && node --check dashboard-v2/services/discordService.js && node --check dashboard-v2/services/realtimeService.js && node --check dashboard-v2/middlewares/idempotency.js && node --check dashboard-v2/services/managementService.js && node --check dashboard-v2/routes/management.js && node --check dashboard-v2/routes/attendance.js && node --check dashboard-v2/services/weeklyReportService.js && node --check dashboard-v2/config/promotionRequirements.js && node --check dashboard-v2/services/promotionService.js && node --check dashboard-v2/routes/promotions.js && node --check dashboard-v2/public/js/management.js && node --check dashboard-v2/public/js/dashboard.js && node --check dashboard-v2/public/js/attendance.js && node --check dashboard-v2/routes/extras.js && node --check dashboard-v2/services/roleSyncService.js && node --check deploy-commands.js",
-    "verify": "npm run check && node scripts/v6-self-test.js"
+    "check": "node scripts/check-all-js.js",
+    "verify": "npm run check && node scripts/v7-self-test.js"
   },
   "engines": {
     "node": ">=20.0.0 <25.0.0"

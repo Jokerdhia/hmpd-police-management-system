@@ -1,4 +1,4 @@
-HMPD V6 — VARIABLES RENDER
+HMPD V7 — VARIABLES RENDER
 
 OBLIGATOIRES
 CLIENT_ID=ID_APPLICATION_DISCORD
@@ -48,7 +48,7 @@ ATTENDANCE_REMARK_CHANNEL_ID=ID_SALON_REMARQUES
 FORCED_PAUSE_PENALTY_HOURS=1
 FORCED_END_PENALTY_HOURS=5
 
-RÈGLES V6 IMPORTANTES
+RÈGLES V7 IMPORTANTES
 - High Grade peut accéder à tout le MDT.
 - High Grade ne peut jamais modifier son propre dossier.
 - Une cible de grade supérieur est toujours en lecture seule.

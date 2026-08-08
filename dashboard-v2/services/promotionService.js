@@ -86,7 +86,7 @@ const MIN_DAILY_PROMOTION_SECONDS = Math.max(60, Number(process.env.PROMOTION_MI
 
 async function getQualifiedRankDays(userId, rankStartedAt){
   if(!rankStartedAt)return {qualifiedDays:0,totalServiceDays:0,daily:[]};
-  // V6 : une session qui traverse minuit est répartie entre les vraies journées
+  // V7 : une session qui traverse minuit est répartie entre les vraies journées
   // Bruxelles. Les pauses historiques n'étant pas stockées par intervalle, leur
   // durée totale est répartie proportionnellement sur les tranches de la session.
   const result=await pool.query(`
@@ -299,7 +299,7 @@ async function approvePromotion({userId,reason,force=false,actorId}){
   const cleanReason=clean(reason,2000)||'';
   if(forced && cleanReason.length<3)throw Object.assign(new Error('Un motif est obligatoire pour forcer une promotion.'),{status:400});
 
-  // V6 : verrou PostgreSQL inter-instance. Deux clics, deux onglets ou deux
+  // V7 : verrou PostgreSQL inter-instance. Deux clics, deux onglets ou deux
   // instances Render ne peuvent plus approuver le même dossier simultanément.
   const lockClient=await pool.connect();
   let oldRoleId=null;

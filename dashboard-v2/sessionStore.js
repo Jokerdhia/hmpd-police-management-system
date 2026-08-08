@@ -1,29 +1,9 @@
 const session = require("express-session");
-const { Pool } = require("pg");
+const { pool, ready: databaseReady } = require("../database");
 
-const RAW_DATABASE_URL = String(process.env.DATABASE_URL || "").trim();
-const DATABASE_URL = RAW_DATABASE_URL.replace(
-  /sslmode=(prefer|require|verify-ca)(?=&|$)/i,
-  "sslmode=verify-full"
-);
-
-if (!DATABASE_URL) {
-  throw new Error("DATABASE_URL est obligatoire pour stocker les sessions dans PostgreSQL.");
-}
-
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: DATABASE_URL.includes("localhost") ? false : undefined,
-  max: Number.parseInt(process.env.SESSION_DATABASE_POOL_MAX, 10) || 3,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000,
-});
-
-pool.on("error", (error) => {
-  console.error("❌ Erreur PostgreSQL du stockage des sessions :", error?.message || error);
-});
-
-const ready = pool.query(`
+// V7.2.1 : le stockage des sessions partage le pool PostgreSQL principal.
+// Cela évite un second pool Neon et réduit le nombre de connexions ouvertes.
+const ready = databaseReady.then(() => pool.query(`
   CREATE TABLE IF NOT EXISTS dashboard_sessions (
     sid TEXT PRIMARY KEY,
     sess JSONB NOT NULL,
@@ -32,7 +12,7 @@ const ready = pool.query(`
 
   CREATE INDEX IF NOT EXISTS idx_dashboard_sessions_expire
     ON dashboard_sessions(expire);
-`).then(() => {
+`)).then(() => {
   console.log("✅ Sessions du dashboard stockées dans Neon PostgreSQL.");
 });
 
@@ -59,6 +39,10 @@ class PostgreSqlSessionStore extends session.Store {
     const pruneIntervalMs =
       Number.parseInt(process.env.SESSION_PRUNE_INTERVAL_MS, 10) ||
       15 * 60 * 1000;
+
+    // Évite une écriture Neon à chaque requête quand rolling=true.
+    // La durée de session est prolongée au maximum une fois toutes les 15 min.
+    this.touchIntervalMs = Math.max(60 * 1000, Number.parseInt(process.env.SESSION_TOUCH_INTERVAL_MS, 10) || 15 * 60 * 1000);
 
     this.pruneTimer = setInterval(() => {
       this.pruneExpiredSessions().catch((error) => {
@@ -126,12 +110,14 @@ class PostgreSqlSessionStore extends session.Store {
   }
 
   touch(sid, sessionData, callback = () => {}) {
+    const newExpiry = getExpiry(sessionData);
     ready
       .then(() => pool.query(
         `UPDATE dashboard_sessions
-         SET expire = $2, sess = $3::jsonb
-         WHERE sid = $1`,
-        [sid, getExpiry(sessionData), JSON.stringify(sessionData)]
+         SET expire = $2
+         WHERE sid = $1
+           AND expire < $2::timestamptz - ($3::text || ' milliseconds')::interval`,
+        [sid, newExpiry, String(this.touchIntervalMs)]
       ))
       .then(() => callback(null))
       .catch((error) => callback(error));
