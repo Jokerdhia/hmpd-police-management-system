@@ -223,7 +223,7 @@ function getPermissions(member) {
     canManagePoints: isHighGrade,
     canManagePromotions: isHighGrade || (hasPoliceRole && atLeast('Captain')),
     canApprovePromotions: isHighGrade || (hasPoliceRole && atLeast('Deputy Chief')),
-    canViewCommandCenter: isHighGrade || (hasPoliceRole && atLeast('Lieutenant')),
+    canViewCommandCenter: isHighGrade,
     canFullAdmin: isHighGrade || (hasPoliceRole && grade === 'Chief Police'),
   };
 }
