@@ -20,6 +20,7 @@ const {
 
 const { broadcast } = require("../services/realtimeService");
 const { audit } = require("../services/managementService");
+const { getDiscordMember } = require("../services/discordService");
 
 const router = express.Router();
 
@@ -86,15 +87,41 @@ function normalizeExpiration(value) {
   return date.toISOString();
 }
 
-router.get("/activity", async (request, response, next) => {
+router.get("/activity", requireHighCommand, async (request, response, next) => {
   try {
     const limit = normalizeLimit(request.query.limit);
     const activity = await listActivity(limit);
 
+    // Résout les identifiants Discord en noms lisibles pour le journal.
+    // Un échec Discord ne doit jamais bloquer complètement le journal.
+    const ids = [...new Set(
+      activity.flatMap((entry) => [entry.user_id, entry.moderator_id])
+        .map((value) => String(value || "").trim())
+        .filter((value) => /^\d{16,22}$/.test(value))
+    )];
+
+    const resolved = new Map();
+    await Promise.all(ids.map(async (id) => {
+      try {
+        const member = await getDiscordMember(id);
+        if (member?.found) {
+          resolved.set(id, member.displayName || member.username || null);
+        }
+      } catch (_) {
+        // Fallback côté client / base si Discord est momentanément indisponible.
+      }
+    }));
+
+    const enrichedActivity = activity.map((entry) => ({
+      ...entry,
+      officer_name: resolved.get(String(entry.user_id || "")) || null,
+      moderator_name: resolved.get(String(entry.moderator_id || "")) || null,
+    }));
+
     return response.status(200).json({
       success: true,
-      total: activity.length,
-      activity,
+      total: enrichedActivity.length,
+      activity: enrichedActivity,
     });
   } catch (error) {
     return next(error);
