@@ -4,8 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HMPD MDT • Command Center V7</title>
-  <link rel="stylesheet" href="/css/style.css?v=7.1.0">
-  <link rel="stylesheet" href="/css/management.css?v=7.1.0">
+  <link rel="stylesheet" href="/css/style.css?v=7.2.0">
+  <link rel="stylesheet" href="/css/management.css?v=7.2.0">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -227,7 +227,7 @@
       <section id="managementPage" class="page">
         <div class="management-hero compact-command-hero">
           <div><p class="eyebrow">HIGH COMMAND</p><h2>Centre de commandement</h2><p>Supervision opérationnelle et administrative.</p></div>
-          <button class="btn btn-secondary" id="managementRefresh">Actualiser</button>
+          <div class="command-hero-actions"><button class="command-bell" id="commandAlertBell" type="button" title="Voir les priorités">🔔 <span id="commandAlertCount">0</span></button><button class="btn btn-secondary" id="managementRefresh">Actualiser</button></div>
         </div>
 
         <nav class="command-tabs" id="commandTabs" aria-label="Catégories du centre de commandement">
@@ -240,14 +240,15 @@
         <div class="command-tab-panel active" data-command-panel="overview">
           <div class="stats-grid management-stats command-summary-grid">
             <article class="stat-card"><div class="stat-icon">🟢</div><div><span>En service</span><strong id="mgOnDuty">0</strong></div></article>
-            <article class="stat-card"><div class="stat-icon">📈</div><div><span>Score moyen</span><strong id="mgAverageScore">0</strong></div></article>
+            <article class="stat-card"><div class="stat-icon">📈</div><div><span>Score moyen</span><strong id="mgAverageScore">0</strong><small id="mgServiceTrend" class="trend-chip">— activité 7j</small></div></article>
             <article class="stat-card"><div class="stat-icon">🎖️</div><div><span>Éligibles promotion</span><strong id="mgPromotions">0</strong></div></article>
             <article class="stat-card"><div class="stat-icon">⚠️</div><div><span>Inactifs 7j+</span><strong id="mgInactive">0</strong></div></article>
             <article class="stat-card"><div class="stat-icon">⭐</div><div><span>Excellentes performances</span><strong id="mgExcellent">0</strong></div></article>
-            <article class="stat-card"><div class="stat-icon">🧭</div><div><span>À surveiller</span><strong id="mgAttention">0</strong></div></article>
+            <article class="stat-card"><div class="stat-icon">🧭</div><div><span>À surveiller</span><strong id="mgAttention">0</strong><small id="mgCriticalAlerts" class="trend-chip danger">0 critique</small></div></article>
           </div>
+          <article class="panel command-priority-panel" id="commandPrioritiesPanel"><div class="panel-head"><div><h2>Priorités High Command aujourd’hui</h2><p>Maximum 5 actions classées par urgence.</p></div><span class="priority-badge" id="priorityCount">0 action</span></div><div id="managementPriorities" class="priority-grid"></div></article>
           <div class="dashboard-grid command-overview-grid">
-            <article class="panel command-section-panel"><div class="panel-head"><div><h2>Alertes intelligentes</h2><p>Éléments nécessitant une vérification</p></div></div><div id="managementAlerts" class="management-list command-scroll-list"></div></article>
+            <article class="panel command-section-panel"><div class="panel-head"><div><h2>Alertes intelligentes</h2><p>Alertes utiles uniquement — triées par priorité.</p></div></div><div id="managementAlerts" class="management-list command-scroll-list"></div></article>
             <article class="panel command-section-panel"><div class="panel-head"><div><h2>Décisions de promotion</h2><p>Dossiers nécessitant une décision High Command.</p></div></div><div id="promotionStatusTabs" class="promotion-tabs premium-tabs"><button data-promo-filter="eligible" class="active">Éligibles</button><button data-promo-filter="evaluation">Évaluation</button><button data-promo-filter="frozen">Gelées</button></div><div id="managementPromotions" class="management-list command-scroll-list"></div></article>
           </div>
         </div>
@@ -263,7 +264,7 @@
 
         <div class="command-tab-panel" data-command-panel="audit">
           <div class="dashboard-grid command-audit-grid">
-            <article class="panel command-section-panel"><div class="panel-head"><div><h2>Audit High Command</h2><p>Qui a modifié quoi et quand.</p></div></div><div id="managementAudit" class="management-list command-scroll-list audit-list-clean"></div></article>
+            <article class="panel command-section-panel"><div class="panel-head panel-head-responsive"><div><h2>Audit High Command</h2><p>Actions lisibles avec noms Discord.</p></div><div id="auditFilters" class="audit-filters"><button class="active" data-audit-filter="all">Tout</button><button data-audit-filter="promotion">Promotions</button><button data-audit-filter="points">Points</button><button data-audit-filter="discipline">Discipline</button><button data-audit-filter="evaluation">Évaluations</button></div></div><div id="managementAudit" class="management-list command-scroll-list audit-list-clean"></div></article>
             <article class="panel command-section-panel command-activity-panel">
               <div class="panel-head panel-head-responsive"><div><h2>Activité récente</h2><p>Services, points, sanctions et actions administratives.</p></div><div class="command-live"><span class="live-dot"></span><span id="managementAutoStatus">Auto · 30 s</span><small id="managementLastUpdate">—</small></div></div>
               <div id="managementRecentActivity" class="command-activity-list command-scroll-list"><div class="empty">Chargement de l’activité…</div></div>
@@ -345,6 +346,6 @@
 
   <script src="/js/dashboard.js?v=7.0.0"></script>
   <script src="/js/attendance.js?v=7.0.0"></script>
-  <script src="/js/management.js?v=7.1.0"></script>
+  <script src="/js/management.js?v=7.2.0"></script>
 </body>
 </html>

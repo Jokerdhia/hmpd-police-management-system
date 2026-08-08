@@ -4,10 +4,11 @@
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const dur=s=>`${Math.floor(Number(s||0)/3600)}h ${String(Math.floor(Number(s||0)%3600/60)).padStart(2,'0')}m`;
   const dt=v=>v?new Date(v).toLocaleString('fr-FR'):'Jamais';
-  let data=null,promotions=[],permissions={},promoFilter='eligible',promoPageFilter='all',promoSearch='',promoPage=1,promoPageSize=12,selectedPromotionUser=null,managementTimer=null,notifyTimer=null;
+  let data=null,promotions=[],permissions={},promoFilter='eligible',promoPageFilter='all',promoSearch='',promoPage=1,promoPageSize=12,selectedPromotionUser=null,managementTimer=null,notifyTimer=null,loadPromise=null,currentCommandTab='overview',auditFilter='all',auditRows=[];
   function activateCommandTab(tab){
     const valid=['overview','officers','planning','audit'];
     const target=valid.includes(tab)?tab:'overview';
+    currentCommandTab=target;
     $$('#commandTabs [data-command-tab]').forEach(b=>{
       const active=b.dataset.commandTab===target;
       b.classList.toggle('active',active);
@@ -15,6 +16,7 @@
     });
     $$('[data-command-panel]').forEach(p=>p.classList.toggle('active',p.dataset.commandPanel===target));
     try{sessionStorage.setItem('hmpdCommandTab',target)}catch{}
+    if(data)loadSecondaryForTab(target,{silent:true});
   }
   function bindCommandTabs(){
     const tabs=$('#commandTabs');
@@ -109,7 +111,13 @@
     $('#mgOnDuty').textContent=data.summary.onDuty;
     $('#mgAverageScore').textContent=data.summary.averageScore+'/100';
     $('#mgInactive').textContent=data.summary.inactive7;if($('#mgExcellent'))$('#mgExcellent').textContent=data.summary.excellent||0;if($('#mgAttention'))$('#mgAttention').textContent=data.summary.needsAttention||0;
-    $('#managementAlerts').innerHTML=data.alerts.map(a=>{const o=data.officers.find(x=>x.user_id===a.user_id);return `<button class="management-row severity-${a.severity}" data-mg-profile="${a.user_id}"><span>${a.severity==='high'?'🔴':a.severity==='medium'?'🟠':'🔵'}</span><div><strong>${esc(o?.display_name||a.user_id)}</strong><p>${esc(a.message)}</p></div></button>`}).join('')||'<div class="empty">Aucune alerte.</div>';
+    const trend=Number(data.trends?.servicePct||0),trendEl=$('#mgServiceTrend');if(trendEl){trendEl.textContent=`${trend>0?'▲':trend<0?'▼':'•'} ${Math.abs(trend)}% activité 7j`;trendEl.classList.toggle('positive',trend>0);trendEl.classList.toggle('negative',trend<0)}
+    const critical=Number(data.summary.criticalAlerts||0);
+    if($('#mgCriticalAlerts'))$('#mgCriticalAlerts').textContent=`${critical} critique${critical>1?'s':''}`;
+    if($('#commandAlertCount'))$('#commandAlertCount').textContent=critical;
+    if($('#commandAlertBell'))$('#commandAlertBell').classList.toggle('has-alerts',critical>0);
+    $('#managementAlerts').innerHTML=(data.alerts||[]).slice(0,18).map(a=>{const o=data.officers.find(x=>x.user_id===a.user_id);return `<button class="management-row severity-${a.severity}" data-mg-profile="${a.user_id}"><span>${a.severity==='high'?'🔴':a.severity==='medium'?'🟠':'🔵'}</span><div><strong>${esc(o?.display_name||a.user_id)}</strong><p>${esc(a.message)}</p></div><small class="alert-priority">P${Number(a.priority||0)}</small></button>`}).join('')||'<div class="empty">Aucune alerte importante.</div>';
+    const priorities=data.priorities||[];if($('#priorityCount'))$('#priorityCount').textContent=`${priorities.length} action${priorities.length>1?'s':''}`;if($('#managementPriorities'))$('#managementPriorities').innerHTML=priorities.map((a,i)=>{const o=data.officers.find(x=>x.user_id===a.user_id);return `<button class="priority-card severity-${a.severity}" data-mg-profile="${a.user_id}"><span class="priority-rank">${i+1}</span><div><strong>${esc(o?.display_name||a.user_id)}</strong><p>${esc(a.message)}</p></div><span class="priority-arrow">→</span></button>`}).join('')||'<div class="empty compact">✅ Aucune priorité urgente aujourd’hui.</div>';
     renderRecentActivity();
     const cov=$('#coverageGrid');if(cov)cov.innerHTML=(data.coverage||[]).map(x=>`<div class="coverage-hour ${x.officers===0?'coverage-empty':x.officers<=2?'coverage-low':''}"><strong>${String(x.hour).padStart(2,'0')}h</strong><span>${x.officers}</span></div>`).join('');
     const list=data.officers.filter(o=>!q||String(o.display_name||'').toLowerCase().includes(q)||String(o.grade||'').toLowerCase().includes(q)||o.user_id.includes(q));
@@ -117,33 +125,42 @@
   }
   function reportText(r){return [`RAPPORT HEBDOMADAIRE HMPD`,`Généré : ${new Date(r.generatedAt).toLocaleString('fr-FR')}`,``,`Effectif : ${r.summary.officers} | En service : ${r.summary.onDuty} | Score moyen : ${r.summary.averageScore}/100`,`Dossiers éligibles : ${promotions.filter(p=>p.status==='eligible').length} | Inactifs 7j+ : ${r.summary.inactive7}`,``,`TOP PRÉSENCE`,...r.topAttendance.map((o,i)=>`${i+1}. ${o.display_name||o.user_id} — ${dur(o.week_seconds)} — score ${o.score}/100`),``,`PROMOTIONS ÉLIGIBLES`,...(promotions.filter(p=>p.status==='eligible').length?promotions.filter(p=>p.status==='eligible').map(p=>`• ${p.display_name||p.user_id} → ${p.to_grade} (${p.progress.percent}%)`):['• Aucune']),``,`INACTIFS`,...(r.inactive.length?r.inactive.map(o=>`• ${o.display_name||o.user_id} — ${o.inactive_days} jours`):['• Aucun'])].join('\n')}
 
-  async function load({silent=false}={}){
-    const refresh=$('#managementRefresh');if(refresh)refresh.disabled=true;
-    try{
-      const results=await Promise.allSettled([req('/api/management/overview'),req('/api/management/audit?limit=50'),req('/api/management/weekly-report'),req('/api/promotions')]);
-      const [ovR,auditR,repR,proR]=results;
-      if(ovR.status!=='fulfilled')throw ovR.reason;
-      data=ovR.value;
-      if(proR.status==='fulfilled')promotions=proR.value.promotions||[];
-      render($('#managementSearch')?.value||'');renderPromotions();clearError();
-      if(repR.status==='fulfilled')$('#weeklyReport').textContent=reportText(repR.value.report);
-      else if($('#weeklyReport'))$('#weeklyReport').textContent='Rapport temporairement indisponible — les données principales restent actives.';
-      if(auditR.status==='fulfilled')$('#managementAudit').innerHTML=auditR.value.audit.map(x=>`<div class="management-row static"><span>🧾</span><div><strong>${esc(x.action)}</strong><p>${esc(x.actor_id)} → ${esc(x.target_id||'système')} · ${dt(x.created_at)}</p></div></div>`).join('')||'<div class="empty">Aucun audit.</div>';
-      else if($('#managementAudit'))$('#managementAudit').innerHTML='<div class="empty">Audit temporairement indisponible.</div>';
-      const optionalFailed=results.slice(1).filter(x=>x.status==='rejected').length;
-      if(optionalFailed&&!silent)console.warn(`Command Center: ${optionalFailed} module(s) secondaire(s) indisponible(s).`);
-    }catch(e){
-      if(!silent)notify(`Centre de commandement indisponible : ${e.message}`,false);
-      else console.warn('Actualisation automatique impossible :',e.message);
-    }finally{if(refresh)refresh.disabled=false}
+  function renderAudit(){
+    const box=$('#managementAudit');if(!box)return;
+    const rows=auditFilter==='all'?auditRows:auditRows.filter(x=>x.category===auditFilter);
+    box.innerHTML=rows.map(x=>`<div class="management-row static audit-readable"><span class="audit-icon">${esc(x.icon||'🧾')}</span><div><strong>${esc(x.label||x.action)}</strong><p><b>${esc(x.actor_name||x.actor_id||'Système')}</b>${x.target_id?` → ${esc(x.target_name||x.target_id)}`:''}</p><small>${dt(x.created_at)}</small></div></div>`).join('')||'<div class="empty">Aucun audit dans cette catégorie.</div>';
   }
+  async function loadSecondaryForTab(tab,{silent=false}={}){
+    try{
+      if(tab==='planning'){
+        const rep=await req('/api/management/weekly-report');
+        if($('#weeklyReport'))$('#weeklyReport').textContent=reportText(rep.report);
+      }else if(tab==='audit'){
+        const a=await req('/api/management/audit?limit=80');auditRows=a.audit||[];renderAudit();
+      }
+    }catch(e){if(!silent)notify(`Module temporairement indisponible : ${e.message}`,false)}
+  }
+  async function load({silent=false,force=false}={}){
+    if(loadPromise)return loadPromise;
+    const refresh=$('#managementRefresh');if(refresh)refresh.disabled=true;
+    loadPromise=(async()=>{
+      try{
+        const [overview,promo]=await Promise.all([req(`/api/management/overview${force?'?force=1':''}`),req('/api/promotions')]);
+        data=overview;promotions=promo.promotions||[];render($('#managementSearch')?.value||'');renderPromotions();clearError();
+        await loadSecondaryForTab(currentCommandTab,{silent:true});
+      }catch(e){if(!silent)notify(`Centre de commandement indisponible : ${e.message}`,false);else console.warn('Actualisation automatique impossible :',e.message)}
+      finally{if(refresh)refresh.disabled=false;loadPromise=null}
+    })();
+    return loadPromise;
+  }
+
   function startManagementAutoRefresh(){
     if(managementTimer)clearInterval(managementTimer);
-    managementTimer=setInterval(()=>{if($('#managementPage')?.classList.contains('active'))load({silent:true})},30000);
+    managementTimer=setInterval(()=>{if($('#managementPage')?.classList.contains('active')&&!document.hidden)load({silent:true})},30000);
   }
 
   async function timeline(id){
-    try{const r=await req(`/api/management/officers/${id}/timeline?limit=80`);const o=data?.officers.find(x=>x.user_id===id);const html=`<div class="mg-profile"><h3>${esc(o?.display_name||id)}</h3>${o?scoreBar(o):''}<div class="timeline-list">${r.timeline.map(x=>`<div class="timeline-item"><time>${dt(x.created_at)}</time><div><strong>${esc(x.title)}</strong><p>${esc(x.detail||'')}</p></div></div>`).join('')||'<div class="empty">Aucun événement.</div>'}</div></div>`;const modal=$('#profileModal');$('#profileContent').innerHTML=html;modal?.classList.remove('hidden')}catch(e){notify(e.message,false)}
+    try{const r=await req(`/api/management/officers/${id}/timeline?limit=80`);const o=data?.officers.find(x=>x.user_id===id);const html=`<div class="mg-profile pro"><div class="mg-profile-hero"><img src="${esc(o?.avatar_url||'https://cdn.discordapp.com/embed/avatars/0.png')}" alt=""><div><span class="promo-section-kicker">DOSSIER HIGH COMMAND</span><h3>${esc(o?.display_name||id)}</h3><p>${esc(o?.grade||'—')} · ${esc(id)}</p></div></div>${o?`<div class="mg-profile-stats"><div><span>Score</span><strong>${o.score.total}/100</strong></div><div><span>Service semaine</span><strong>${dur(o.week_seconds)}</strong></div><div><span>Points</span><strong>${Number(o.points||0)}</strong></div><div><span>Discipline</span><strong>${o.active_sanctions?`⚠ ${o.active_sanctions}`:'✅ RAS'}</strong></div><div><span>Dernier service</span><strong>${o.inactive_days===999?'Jamais':o.inactive_days+' j'}</strong></div></div>`:''}<div class="profile-timeline-head"><h4>Historique récent</h4><span>${r.timeline.length} événement(s)</span></div><div class="timeline-list">${r.timeline.map(x=>`<div class="timeline-item"><time>${dt(x.created_at)}</time><div><strong>${esc(x.title)}</strong><p>${esc(x.detail||'')}</p>${x.actor?`<small>Par ${esc(x.actor)}</small>`:''}</div></div>`).join('')||'<div class="empty">Aucun événement.</div>'}</div></div>`;const modal=$('#profileModal');$('#profileContent').innerHTML=html;modal?.classList.remove('hidden')}catch(e){notify(e.message,false)}
   }
 
   function stars(name,value=5){return `<label class="rp-rating"><span>${name}</span><select data-rp-rating="${name}">${[1,2,3,4,5].map(n=>`<option value="${n}" ${n===value?'selected':''}>${n} / 5</option>`).join('')}</select></label>`}
@@ -222,8 +239,10 @@
       const me=await req('/api/me');permissions=me.permissions||{};
       const nav=$('#managementNav');if(permissions.canViewCommandCenter)nav?.classList.remove('hidden');nav?.addEventListener('click',()=>{document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));nav.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('#managementPage')?.classList.add('active');$('#pageTitle').textContent='Centre de commandement';$('#pageSubtitle').textContent='Performance, alertes et audit High Command';load()});
       const promoNav=$('#promotionsNav');if(permissions.canManagePromotions)promoNav?.classList.remove('hidden');promoNav?.addEventListener('click',()=>{document.querySelectorAll('.nav-item').forEach(b=>b.classList.remove('active'));promoNav.classList.add('active');document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));$('#promotionsPage')?.classList.add('active');$('#pageTitle').textContent='Promotions';$('#pageSubtitle').textContent='Dossiers de carrière et validation High Command';load()});
-      $('#managementRefresh')?.addEventListener('click',load);$('#promotionsRefresh')?.addEventListener('click',load);$('#managementSearch')?.addEventListener('input',e=>render(e.target.value));$('#copyWeeklyReport')?.addEventListener('click',()=>navigator.clipboard?.writeText($('#weeklyReport').textContent));
+      $('#managementRefresh')?.addEventListener('click',()=>load({force:true}));$('#promotionsRefresh')?.addEventListener('click',load);$('#managementSearch')?.addEventListener('input',e=>render(e.target.value));$('#copyWeeklyReport')?.addEventListener('click',()=>navigator.clipboard?.writeText($('#weeklyReport').textContent));
       bindCommandTabs();
+      $('#commandAlertBell')?.addEventListener('click',()=>{activateCommandTab('overview');$('#commandPrioritiesPanel')?.scrollIntoView({behavior:'smooth',block:'start'})});
+      $('#auditFilters')?.addEventListener('click',e=>{const b=e.target.closest('[data-audit-filter]');if(!b)return;auditFilter=b.dataset.auditFilter;$$('#auditFilters button').forEach(x=>x.classList.toggle('active',x===b));renderAudit()});
       $('#promotionStatusTabs')?.addEventListener('click',e=>{const b=e.target.closest('[data-promo-filter]');if(!b)return;promoFilter=b.dataset.promoFilter;$$('#promotionStatusTabs button').forEach(x=>x.classList.toggle('active',x===b));renderPromotions()});
       $('#promotionPageTabs')?.addEventListener('click',e=>{const b=e.target.closest('[data-promo-page-filter]');if(!b)return;promoPageFilter=b.dataset.promoPageFilter;promoPage=1;$$('#promotionPageTabs button').forEach(x=>x.classList.toggle('active',x===b));renderPromotions()});
       $('#promotionSearch')?.addEventListener('input',e=>{promoSearch=e.target.value.trim();promoPage=1;renderPromotions()});$('#promotionPrevPage')?.addEventListener('click',()=>{promoPage=Math.max(1,promoPage-1);renderPromotions()});$('#promotionNextPage')?.addEventListener('click',()=>{promoPage+=1;renderPromotions()});

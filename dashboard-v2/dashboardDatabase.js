@@ -25,6 +25,7 @@ const ready = coreReady.then(() => pool.query(`
   );
   CREATE INDEX IF NOT EXISTS idx_audit_created ON admin_audit_log(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_audit_target ON admin_audit_log(target_id, created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_audit_action ON admin_audit_log(action, created_at DESC);
 `)).then(() => console.log("✅ Tables Dashboard PostgreSQL prêtes."));
 
 function lim(v,f=50,m=200){const n=parseInt(v,10);return Number.isInteger(n)&&n>0?Math.min(n,m):f}
