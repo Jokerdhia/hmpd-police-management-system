@@ -152,15 +152,19 @@ async function enrichOfficer(officer) {
     discordGrade || officer.grade || "Academy"
   );
   const nextGrade = getNextGradeByName(displayedGrade);
-  // Conservé pour compatibilité d'affichage : les points sont un score d'activité,
-  // ils ne déterminent plus le grade ni une promotion automatique.
+  // Progression réelle vers le grade suivant : le seuil de points est une
+  // condition obligatoire du dossier, en plus des critères RP/présence/discipline.
+  const currentGradeConfig = GRADES.find((g) => g.name === displayedGrade);
+  const currentFloor = Math.max(0, Number(currentGradeConfig?.points) || 0);
+  const nextFloor = nextGrade ? Math.max(currentFloor, Number(nextGrade.points) || 0) : currentFloor;
+  const interval = Math.max(nextFloor - currentFloor, 1);
   const gradeProgress = {
     currentGrade: displayedGrade,
-    currentGradePoints: 0,
+    currentGradePoints: currentFloor,
     nextGrade: nextGrade?.name || null,
-    nextGradePoints: null,
-    pointsRemaining: 0,
-    progressPercent: 0,
+    nextGradePoints: nextGrade ? nextFloor : null,
+    pointsRemaining: nextGrade ? Math.max(nextFloor - points, 0) : 0,
+    progressPercent: nextGrade ? Math.min(100, Math.max(0, Math.round(((points - currentFloor) / interval) * 100))) : 100,
     isMaximum: !nextGrade,
   };
 

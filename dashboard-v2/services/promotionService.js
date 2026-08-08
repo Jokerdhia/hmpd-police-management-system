@@ -199,11 +199,22 @@ async function getPromotionProfile(userId, actorId='SYSTEM'){
   const minDays=Number(base.requirement.minDaysInRank||0);
   const daysOk=base.requirement.appointmentOnly?true:daysInRank>=minDays;
   const disciplineOk=activeSanctions===0;
+  const currentPoints=Math.max(0,Number(base.officer.points)||0);
+  const targetGrade=GRADES.find(g=>g.name===base.case.to_grade);
+  const requiredPoints=Math.max(0,Number(targetGrade?.points)||0);
+  const pointsOk=currentPoints>=requiredPoints;
+  const pointsRemaining=Math.max(requiredPoints-currentPoints,0);
+  const currentGradeFloor=Math.max(0,Number(GRADES.find(g=>g.name===base.case.from_grade)?.points)||0);
+  const pointInterval=Math.max(requiredPoints-currentGradeFloor,1);
+  const pointProgressPercent=requiredPoints<=currentGradeFloor?100:Math.min(100,Math.max(0,Math.round(((currentPoints-currentGradeFloor)/pointInterval)*100)));
   const manualDone=items.filter(x=>x.completed).length;
-  const denominator=items.length+(base.requirement.appointmentOnly?0:2);
-  const numerator=manualDone+(base.requirement.appointmentOnly?0:(daysOk?1:0)+(disciplineOk?1:0));
+  // La promotion est maintenant réellement liée aux points : points + discipline
+  // sont obligatoires pour tous les grades, et la présence s'ajoute aux grades
+  // qui ne sont pas des nominations High Command.
+  const denominator=items.length+2+(base.requirement.appointmentOnly?0:1);
+  const numerator=manualDone+(pointsOk?1:0)+(disciplineOk?1:0)+(base.requirement.appointmentOnly?0:(daysOk?1:0));
   const percent=denominator?Math.round(numerator/denominator*100):100;
-  const eligible=items.every(x=>x.completed)&&daysOk&&disciplineOk;
+  const eligible=items.every(x=>x.completed)&&daysOk&&disciplineOk&&pointsOk;
   let status=base.case.status;
   if(activeSanctions>0) status='frozen';
   else if(['progress','eligible','frozen'].includes(status)) status=eligible?'eligible':'progress';
@@ -238,7 +249,7 @@ async function getPromotionProfile(userId, actorId='SYSTEM'){
       try{
         await sendChannelMessage(PROMOTION_CHANNEL_ID,{embeds:[{color:0x2ecc71,title:'🎖️ PROMOTION CANDIDATE',description:`👤 **Agent :** <@${userId}>
 🎖️ **Promotion :** ${base.case.from_grade} → ${base.case.to_grade}
-⭐ **Points d’activité :** ${base.officer.points}
+⭐ **Points d’activité :** ${currentPoints}/${requiredPoints} requis${pointsRemaining?` (${pointsRemaining} restant${pointsRemaining>1?'s':''})`:' ✅'}
 📅 **Jours de service validés :** ${displayedDays}/${minDays} (minimum ${Math.round(MIN_DAILY_PROMOTION_SECONDS/3600)}h/jour)${evalScore?`
 🎭 **RP Quality :** ${evalScore}/100`:''}
 ⚠️ **Sanctions actives :** ${activeSanctions}
@@ -251,7 +262,7 @@ async function getPromotionProfile(userId, actorId='SYSTEM'){
       }
     }
   }
-  return {...base,case:{...currentCase,status},progress:{percent,eligible,appointmentOnly:Boolean(base.requirement.appointmentOnly),daysInRank,minDays,daysOk,calendarDaysInRank,minDailySeconds:MIN_DAILY_PROMOTION_SECONDS,totalServiceDays:attendanceDays.totalServiceDays,qualifiedDays:attendanceDays.qualifiedDays,dailyAttendance:attendanceDays.daily.slice(0,60),calendar7,streak,activeSanctions,disciplineOk,completed:manualDone,total:items.length,criteria:items,components:{presence:{done:Math.min(daysInRank,minDays),total:minDays,ok:daysOk},criteria:{done:manualDone,total:items.length,ok:items.every(x=>x.completed)},rp:{score:evalScore,ok:evalScore!==null&&evalScore>=80},discipline:{active:activeSanctions,ok:disciplineOk}}},evaluation:evaluation?{...evaluation,score:rpScore(evaluation)}:null,evaluations,currentWeekEvaluation,serviceStats:{week_seconds:Number(serviceStats.week_seconds||0),month_seconds:Number(serviceStats.month_seconds||0)},badges,history,sanctions};
+  return {...base,case:{...currentCase,status},progress:{percent,eligible,appointmentOnly:Boolean(base.requirement.appointmentOnly),daysInRank,minDays,daysOk,calendarDaysInRank,minDailySeconds:MIN_DAILY_PROMOTION_SECONDS,totalServiceDays:attendanceDays.totalServiceDays,qualifiedDays:attendanceDays.qualifiedDays,dailyAttendance:attendanceDays.daily.slice(0,60),calendar7,streak,activeSanctions,disciplineOk,currentPoints,requiredPoints,pointsRemaining,pointsOk,pointProgressPercent,completed:manualDone,total:items.length,criteria:items,components:{points:{done:currentPoints,total:requiredPoints,remaining:pointsRemaining,percent:pointProgressPercent,ok:pointsOk},presence:{done:Math.min(daysInRank,minDays),total:minDays,ok:daysOk},criteria:{done:manualDone,total:items.length,ok:items.every(x=>x.completed)},rp:{score:evalScore,ok:evalScore!==null&&evalScore>=80},discipline:{active:activeSanctions,ok:disciplineOk}}},evaluation:evaluation?{...evaluation,score:rpScore(evaluation)}:null,evaluations,currentWeekEvaluation,serviceStats:{week_seconds:Number(serviceStats.week_seconds||0),month_seconds:Number(serviceStats.month_seconds||0)},badges,history,sanctions};
 }
 
 async function setCriterion({userId,key,completed,note,actorId}){
@@ -299,7 +310,7 @@ async function approvePromotion({userId,reason,force=false,actorId}){
     if(!p.case)throw Object.assign(new Error('Aucune promotion disponible.'),{status:400});
     const latest=(await pool.query(`SELECT status FROM promotion_cases WHERE id=$1`,[p.case.id])).rows[0];
     if(latest?.status==='approved')throw Object.assign(new Error('Cette promotion a déjà été approuvée.'),{status:409});
-    if(!forced && !p.progress.eligible && !p.progress.appointmentOnly)throw Object.assign(new Error('Toutes les conditions obligatoires ne sont pas remplies.'),{status:400});
+    if(!forced && !p.progress.eligible)throw Object.assign(new Error(`Toutes les conditions obligatoires ne sont pas remplies${p.progress.pointsOk?'':` : ${p.progress.pointsRemaining} point(s) manquant(s)`}.`),{status:400});
     if(!forced && p.progress.activeSanctions>0)throw Object.assign(new Error('La promotion est gelée par une sanction active.'),{status:400});
 
     const target=GRADES.find(g=>g.name===p.case.to_grade);
@@ -319,13 +330,11 @@ async function approvePromotion({userId,reason,force=false,actorId}){
       if(!current)throw new Error('Dossier policier introuvable dans Neon.');
       if(normalizeGradeName(current.grade)!==normalizeGradeName(p.case.from_grade))throw new Error(`Le grade Neon a changé pendant la validation (${current.grade}). Recharge le dossier.`);
       const oldPoints=Number(current.points||0);
-      const referencePoints=Number(target.points||0);
       const caseUpdate=await client.query(`UPDATE promotion_cases SET status='approved',decision_reason=$2,decided_by=$3,decided_at=CURRENT_TIMESTAMP,closed_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE id=$1 AND status<>'approved' AND closed_at IS NULL RETURNING id`,[p.case.id,cleanReason||null,String(actorId)]);
       if(!caseUpdate.rowCount)throw Object.assign(new Error('Cette promotion a déjà été approuvée.'),{status:409});
-      await client.query(`UPDATE officers SET grade=$2,points=$3,rank_started_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE user_id=$1`,[userId,p.case.to_grade,referencePoints]);
-      if(oldPoints!==referencePoints){
-        await client.query(`INSERT INTO points_history(user_id,action,amount,old_points,new_points,reason,moderator_id) VALUES($1,$2,$3,$4,$5,$6,$7)`,[userId,referencePoints>oldPoints?'add':'remove',Math.abs(referencePoints-oldPoints),oldPoints,referencePoints,`Synchronisation des points de référence après promotion ${p.case.from_grade} → ${p.case.to_grade}`,String(actorId)]);
-      }
+      // Les points représentent désormais une progression cumulative. Une promotion
+      // change le grade mais ne remet jamais le compteur au seuil du grade.
+      await client.query(`UPDATE officers SET grade=$2,rank_started_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE user_id=$1`,[userId,p.case.to_grade]);
       await client.query(`INSERT INTO grade_history(user_id,from_grade,to_grade,action,reason,actor_id) VALUES($1,$2,$3,'promotion',$4,$5)`,[userId,p.case.from_grade,p.case.to_grade,forced?`[FORCÉ] ${cleanReason}`:(cleanReason||null),String(actorId)]);
       await client.query('COMMIT');
     }catch(e){
@@ -340,12 +349,12 @@ async function approvePromotion({userId,reason,force=false,actorId}){
     if(PROMOTION_CHANNEL_ID) await sendChannelMessage(PROMOTION_CHANNEL_ID,{content:`🎉 Félicitations <@${userId}> !`,embeds:[{color:0xf1c40f,title:'🎖️ PROMOTION OFFICIELLE',description:`👤 **Agent :** <@${userId}>
 ⬆️ **Ancien grade :** ${p.case.from_grade}
 🏅 **Nouveau grade :** ${p.case.to_grade}
-⭐ **Points synchronisés au grade :** ${Number(target.points||0)}
+⭐ **Points d’activité conservés :** ${Number(p.officer.points||0)}
 👑 **${forced?'Promotion forcée par':'Promotion validée par'} :** <@${actorId}>${cleanReason?`
 📝 **Motif / commentaire :** ${cleanReason}`:''}
 
 ${forced?'⚡ **Décision exceptionnelle du High Command.**':'✅ **Promotion approuvée par le High Command.**'}`,timestamp:new Date().toISOString()}],allowed_mentions:{users:[userId,String(actorId)],parse:[]}}).catch(err=>console.error('⚠️ Promotion validée mais annonce Discord impossible :',err?.message||err));
-    await audit({actorId,action:forced?'promotion.force_approved':'promotion.approved',targetId:userId,details:{from:p.case.from_grade,to:p.case.to_grade,reason:cleanReason,forced,daysInRank:p.progress.daysInRank,minDays:p.progress.minDays,eligible:p.progress.eligible,activeSanctions:p.progress.activeSanctions}}).catch(()=>{});
+    await audit({actorId,action:forced?'promotion.force_approved':'promotion.approved',targetId:userId,details:{from:p.case.from_grade,to:p.case.to_grade,reason:cleanReason,forced,points:p.progress.currentPoints,requiredPoints:p.progress.requiredPoints,pointsOk:p.progress.pointsOk,daysInRank:p.progress.daysInRank,minDays:p.progress.minDays,eligible:p.progress.eligible,activeSanctions:p.progress.activeSanctions}}).catch(()=>{});
     invalidatePromotionCenterCache();
     return getPromotionProfile(userId,actorId);
   }finally{

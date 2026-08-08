@@ -1,0 +1,24 @@
+HMPD V7.1 — PROMOTIONS LIÉES AUX POINTS
+
+Le système de promotion est désormais relié au compteur de points.
+
+Barème actuel :
+- Academy -> Officer : 10 points
+- Officer -> Senior Officer : 25 points
+- Senior Officer -> Sergeant : 45 points
+- Sergeant -> First Sergeant : 70 points
+- First Sergeant -> Lieutenant : 100 points
+- Lieutenant -> Captain : 140 points
+- Captain -> Commander : 190 points
+- Commander -> Deputy Chief : 250 points
+- Deputy Chief -> Assistant Chief : 320 points
+- Assistant Chief -> Vice Chief : 400 points
+- Vice Chief -> Chief Police : 500 points
+
+Règles :
+- Atteindre le seuil de points est obligatoire pour être éligible.
+- Les autres conditions restent actives : présence, critères, discipline et décision High Command.
+- Une sanction active gèle toujours la promotion.
+- Le High Command peut toujours forcer une promotion avec un motif audité.
+- Les points ne sont plus remis au seuil lors d'une promotion : ils restent cumulatifs.
+- Le dossier affiche les points actuels, le seuil requis et les points restants.
