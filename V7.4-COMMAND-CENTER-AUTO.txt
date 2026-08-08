@@ -1,0 +1,8 @@
+HMPD MDT V7.4 — COMMAND CENTER AUTO
+
+- Corrige la bannière rouge générique "Erreur" qui pouvait rester visible après un chargement réussi.
+- Les erreurs globales utilisent désormais explicitement la classe toast error.
+- Les alertes intelligentes sont regroupées et calculées automatiquement depuis les données réelles du MDT.
+- Auto-refresh du Centre de commandement toutes les 30 secondes conservé.
+- L'activité récente reste en bas du Centre de commandement et se met à jour automatiquement.
+- Cache front incrémenté en V7.4 pour forcer le navigateur à charger les nouveaux fichiers.
