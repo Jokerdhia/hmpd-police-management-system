@@ -460,3 +460,113 @@ body{
 .profile-hero-meta{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-top:10px}.profile-grade-pill{font-size:12px;padding:6px 10px;background:rgba(59,130,246,.18);border-color:rgba(96,165,250,.5);color:#c7ddff}.profile-hero-meta .profile-status{margin-top:0}.profile-loading{min-height:150px}.profile-loading-text{margin-top:13px!important;font-size:13px}.profile-partial-warning{margin-top:12px;padding:9px 11px;border-radius:10px;border:1px solid rgba(244,200,76,.28);background:rgba(244,200,76,.08);color:#f7d878;font-size:12px;line-height:1.45}.profile-error{padding:32px;text-align:center;color:var(--muted)}.profile-error strong{display:block;color:#fff;font-size:18px;margin-bottom:8px}.profile-error p{margin:0 0 16px}.profile-card small{display:block;color:var(--muted);font-size:11px;margin-top:6px}
 
 .version-badge{display:inline-flex;align-items:center;margin-left:6px;padding:2px 6px;border:1px solid rgba(92,169,255,.35);border-radius:999px;font-size:9px;letter-spacing:.08em;color:#79baff;background:rgba(55,132,255,.09);vertical-align:middle}
+
+/* =========================================================
+   HMPD V7 — TACTICAL COMMAND UI
+   Refonte visuelle 2026 : plus nette, premium et immersive.
+   Aucune dépendance fonctionnelle / API supplémentaire.
+   ========================================================= */
+:root{
+  --bg:#070a0f;
+  --sidebar:#090d13;
+  --panel:#0d131b;
+  --panel-2:#101821;
+  --line:#1d2a38;
+  --muted:#7e8d9e;
+  --text:#eef3f8;
+  --blue:#4d9fff;
+  --blue2:#8cc8ff;
+  --green:#43d38f;
+  --red:#f0626b;
+  --yellow:#e4b95f;
+  --shadow:0 22px 55px rgba(0,0,0,.34);
+  --soft-shadow:0 12px 32px rgba(0,0,0,.24);
+}
+body{
+  background:
+    radial-gradient(circle at 84% -8%,rgba(53,118,187,.13),transparent 26%),
+    linear-gradient(135deg,#070a0f 0%,#080d13 52%,#080c12 100%);
+  color:var(--text);
+}
+body:before{
+  content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;opacity:.16;
+  background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);
+  background-size:42px 42px;
+  mask-image:linear-gradient(to bottom,black,transparent 75%);
+}
+.shell{grid-template-columns:248px minmax(0,1fr)}
+.sidebar{
+  padding:22px 15px 17px;
+  background:linear-gradient(180deg,rgba(9,13,19,.99),rgba(7,11,16,.99));
+  border-right:1px solid #17212d;
+  box-shadow:18px 0 45px rgba(0,0,0,.18);
+}
+.brand{padding:0 6px 20px;margin-bottom:20px;border-bottom:1px solid #18222d;align-items:center}
+.brand-mark{
+  width:50px;height:50px;border-radius:12px!important;padding:5px!important;
+  background:linear-gradient(145deg,#131e2a,#0b1118)!important;
+  border:1px solid #2c4660!important;
+  box-shadow:inset 0 1px rgba(255,255,255,.035),0 8px 24px rgba(0,0,0,.28)!important;
+}
+.brand-mark img{filter:grayscale(.15) drop-shadow(0 0 7px rgba(83,164,244,.32))}
+.brand-copy strong{font-size:16px;letter-spacing:.1px}.brand-copy span{font-size:10px;color:#69798a}
+.version-badge{border-radius:4px;color:#86baf0;border-color:#345a80;background:#102033}
+.nav{gap:4px}
+.nav:before{content:"WORKSPACE";display:block;padding:0 11px 7px;color:#465665;font-size:8px;font-weight:800;letter-spacing:1.6px}
+.nav-item{
+  position:relative;min-height:44px;padding:10px 12px;border-radius:6px;
+  color:#7f8fa0;font-size:12px;border:1px solid transparent;background:transparent;
+}
+.nav-item:hover{transform:none;background:#0f1720;border-color:#1c2a38;color:#cbd7e3}
+.nav-item.active{
+  color:#f2f7fb;background:linear-gradient(90deg,rgba(61,137,219,.17),rgba(61,137,219,.035));
+  border-color:#213c58;box-shadow:none;
+}
+.nav-item.active:before{content:"";position:absolute;left:-16px;top:9px;bottom:9px;width:3px;background:#4d9fff;box-shadow:0 0 12px rgba(77,159,255,.55)}
+.nav-item span:first-child{color:#6688a8;font-size:15px}.nav-item.active span:first-child{color:#68aff7}
+.message-badge{min-width:19px;height:19px;padding:0 5px;font-size:9px;border-radius:5px}
+.sidebar-user{margin-top:auto;padding:12px;border:1px solid #1c2a37;border-radius:8px;background:linear-gradient(145deg,#0e1721,#0a1017);box-shadow:none}
+.status-dot{box-shadow:0 0 10px rgba(67,211,143,.5)}
+.main{padding:28px 32px 44px}
+.topbar{min-height:72px;margin-bottom:22px;padding-bottom:17px;border-bottom:1px solid #172432}
+.topbar .eyebrow{font-size:8px;letter-spacing:2.1px;color:#5589bc;margin-bottom:5px}
+.topbar h1{font-size:29px;letter-spacing:-.45px}.topbar>div>p:last-child{font-size:11px;color:#6c7d8e}
+.clock{min-height:38px;padding:0 12px;display:flex;align-items:center;border:1px solid #223244;border-radius:5px;background:#0c131b;color:#93a5b7;font-size:11px;box-shadow:none}
+.btn{min-height:38px;border-radius:5px;font-size:11px;box-shadow:none}.btn-secondary{background:#0f1720;border-color:#263646;color:#a3b0be}.btn-secondary:hover{border-color:#3e5c7b;background:#121d28}.btn-primary{background:linear-gradient(180deg,#3f8fe3,#3176bf);border-color:#559fe8;box-shadow:0 8px 22px rgba(35,107,181,.15)}
+.stats-grid{gap:12px;margin-bottom:17px}
+.stat-card{
+  min-height:120px;padding:17px;border-radius:9px;
+  border:1px solid #1c2a38;background:linear-gradient(145deg,rgba(255,255,255,.018),transparent 55%),#0d141c;
+  box-shadow:0 10px 28px rgba(0,0,0,.17);transition:transform .18s ease,border-color .18s ease;
+}
+.stat-card:before{content:"";position:absolute;left:0;bottom:0;height:2px;width:100%;background:linear-gradient(90deg,#3d88d6,transparent 74%);opacity:.6}
+.stat-card:after{width:100px;height:100px;right:-36px;bottom:-42px;opacity:.55}
+.stat-card:hover{transform:translateY(-2px);border-color:#29435d;box-shadow:0 14px 34px rgba(0,0,0,.23)}
+.stat-icon{width:40px;height:40px;border-radius:7px;background:#101b26;border:1px solid #223449;font-size:17px}.connected-icon{border-color:#23513b;background:#0d2018}
+.stat-card span{color:#718294;font-size:10px}.stat-card strong{font-size:25px;margin-top:4px}.stat-card small{font-size:9px;color:#52677b}
+.panel{
+  border:1px solid #1b2a39;border-radius:9px;background:linear-gradient(180deg,#0e161f,#0b1219);
+  box-shadow:0 13px 33px rgba(0,0,0,.2);
+}
+.panel-head{min-height:72px;padding:16px 18px;border-bottom:1px solid #182634;background:linear-gradient(180deg,rgba(255,255,255,.012),transparent)}
+.panel-head h2{font-size:16px;letter-spacing:0}.panel-head p{font-size:9px;color:#66798d;margin-top:4px}
+.dashboard-grid{gap:15px}.panel-spaced{margin-top:15px}
+.ranking-list{padding:9px 14px 13px}.ranking-item{border:0;border-bottom:1px solid #172431;border-radius:0;background:transparent;padding:10px 8px}.ranking-item:last-child{border-bottom:0}.ranking-item:hover{transform:none;background:#0f1923}
+.officer-avatar{border-radius:6px;border:1px solid #2a3e51;box-shadow:none}.ranking-position{color:#70859a}.ranking-points{color:#8ebef0}
+.chart-wrap{background:radial-gradient(circle at 50% 45%,rgba(49,113,181,.055),transparent 55%)}
+.grade-roadmap-panel{overflow:hidden}.roadmap-badge{border-radius:4px;background:#102236;color:#83b7ec;border-color:#284e72}
+.search{min-height:38px;border-radius:5px;background:#091119;border-color:#243547;color:#dce6f0;font-size:10px}.search:focus{border-color:#4684c0;box-shadow:0 0 0 2px rgba(70,132,192,.09);background:#0b151f}
+thead{background:#0a1118}th{color:#5e7489;font-size:8px;letter-spacing:.7px;padding:12px 14px}td{padding:12px 14px;border-color:#162431;color:#9aa9b7;font-size:10px}tbody tr:hover td{background:#0f1922}.grade-badge,.rank-badge{border-radius:4px}
+.attendance-filters{border-radius:6px;background:#09121b;border-color:#203345;padding:3px}.attendance-filter{border-radius:4px;min-height:32px;font-size:10px}.attendance-filter.active{background:#18385a;border-color:#2e638f;box-shadow:none}.attendance-filter span{border-radius:4px}.attendance-status{border-radius:4px}
+.my-duty-panel{border-radius:9px;background:linear-gradient(120deg,#0e1d2b,#0b151f);border-color:#213b54}.my-duty-icon{border-radius:8px;background:#0a131c;border:1px solid #213547}
+.attendance-actions .attendance-remove,.attendance-actions .attendance-force,.attendance-actions .attendance-force-pause{border-radius:5px;box-shadow:none}
+.promotion-page-hero,.management-hero{border-radius:9px;border-color:#22384f;background:linear-gradient(120deg,#101f2e,#0b141d);box-shadow:none}
+.promotion-page-hero h2,.management-hero h2{letter-spacing:-.3px}.premium-tabs{background:#09131c;border-color:#1d3042;gap:5px}.premium-tabs button{border-radius:5px;padding:8px 10px;background:#0e1b27;border-color:#233b52;font-size:10px}.premium-tabs button.active{background:#1c4b77;border-color:#3d76a9;box-shadow:none}.premium-tabs button:hover{transform:none}
+.promotion-center-grid{gap:10px}.career-card{border-radius:8px;background:linear-gradient(145deg,#102133,#0b1722);border-color:#223e58;box-shadow:none}.career-card:hover{transform:translateY(-1px);box-shadow:0 10px 25px rgba(0,0,0,.18)}.career-avatar{border-radius:7px}.career-status,.promo-status-chip{border-radius:4px}
+.management-card,.management-item,.alert-card{border-radius:7px}
+.coverage-grid{background:#09121b}
+.report-box{background:#081018;border-color:#1e3041;color:#9eb1c4}
+.modal-backdrop{background:rgba(2,5,8,.84);backdrop-filter:blur(8px)}.modal-card{border-radius:9px;border-color:#294057;background:linear-gradient(180deg,#0e1822,#091119);box-shadow:0 30px 80px rgba(0,0,0,.65)}.modal-head{background:rgba(13,22,31,.97);border-color:#1e3041}.icon-btn{border-radius:5px}.profile-hero{background:radial-gradient(circle at 78% 10%,rgba(55,123,193,.16),transparent 32%),linear-gradient(125deg,rgba(31,71,108,.18),transparent 52%)}.profile-hero:after{color:rgba(130,194,255,.035)}.profile-avatar{border-width:2px;border-color:#4e83b7;box-shadow:0 0 0 5px rgba(49,135,255,.05)}.profile-card{border-radius:7px;background:linear-gradient(145deg,#101e2b,#0a151f);border-color:#21384e}.profile-progress{border-radius:7px}.tab,.quick-grid button{border-radius:5px}
+.toast{border-radius:6px;box-shadow:0 16px 45px rgba(0,0,0,.45)}
+@media(max-width:1350px){.shell{grid-template-columns:225px minmax(0,1fr)}.main{padding:25px 24px 38px}}
+@media(max-width:800px){.sidebar{border-right:0;border-bottom:1px solid #17212d}.nav:before{display:none}.brand{border-bottom:0}.nav-item.active:before{left:22%;right:22%;top:auto;bottom:-3px;width:auto;height:2px}.main{padding:18px 14px 30px}.topbar{padding-bottom:13px}.panel,.stat-card,.promotion-page-hero,.management-hero{border-radius:7px}}

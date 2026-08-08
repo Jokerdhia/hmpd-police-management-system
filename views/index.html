@@ -2,407 +2,179 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  >
-
-  <title>HMPD Dashboard V2</title>
-
-  <link
-    rel="stylesheet"
-    href="/css/style.css"
-  >
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#070b12">
+  <title>HMPD • Command Center</title>
+  <link rel="stylesheet" href="/style.css">
 </head>
-
 <body>
+  <div class="ambient ambient-one"></div>
+  <div class="ambient ambient-two"></div>
+
   <div class="app">
     <aside class="sidebar">
       <div class="brand">
-        <div class="brand-logo">
-          HMPD
-        </div>
-
-        <div>
-          <h1>Police Dashboard</h1>
-          <p>Administration HMPD</p>
+        <div class="brand-logo"><span>H</span></div>
+        <div class="brand-copy">
+          <div class="eyebrow">LOS SANTOS</div>
+          <h1>HMPD</h1>
+          <p>Command Center</p>
         </div>
       </div>
 
+      <div class="sidebar-status">
+        <span class="pulse-dot"></span>
+        <div><strong>SYSTÈME OPÉRATIONNEL</strong><small>Connexion sécurisée</small></div>
+      </div>
+
       <nav class="navigation">
-        <button
-          class="nav-button active"
-          data-page="dashboard"
-        >
-          <span>📊</span>
-          Tableau de bord
+        <div class="nav-label">ESPACE DE TRAVAIL</div>
+        <button class="nav-button active" data-page="dashboard" type="button">
+          <span class="nav-icon">⌂</span><span>Vue d'ensemble</span><i></i>
         </button>
-
-        <button
-          class="nav-button"
-          data-page="officers"
-        >
-          <span>👮</span>
-          Policiers
+        <button class="nav-button" data-page="officers" type="button">
+          <span class="nav-icon">♙</span><span>Effectifs</span><i></i>
         </button>
-
-        <button
-          class="nav-button"
-          data-page="leaderboard"
-        >
-          <span>🏆</span>
-          Classement
+        <button class="nav-button" data-page="leaderboard" type="button">
+          <span class="nav-icon">◇</span><span>Classement</span><i></i>
         </button>
       </nav>
 
+      <div class="sidebar-spacer"></div>
+
+      <div class="dispatch-card">
+        <div class="dispatch-head"><span>DISPATCH</span><span class="live-badge">LIVE</span></div>
+        <div class="dispatch-number" id="sidebarOfficerCount">—</div>
+        <p>officiers enregistrés</p>
+        <div class="dispatch-line"><span id="sidebarOnlineCount">—</span> présents sur le serveur</div>
+      </div>
+
       <div class="sidebar-footer">
-        <span class="online-dot"></span>
-        Dashboard connecté
+        <div><span id="liveTime">--:--</span><small id="liveDate">HMPD NETWORK</small></div>
+        <span class="secure-mark">●</span>
       </div>
     </aside>
 
     <main class="main">
       <header class="topbar">
-        <div>
-          <h2 id="pageTitle">
-            Tableau de bord
-          </h2>
-
-          <p id="pageSubtitle">
-            Vue générale du département
-          </p>
+        <div class="heading-wrap">
+          <div class="breadcrumb"><span>HMPD</span><b>/</b><span id="breadcrumbCurrent">COMMAND</span></div>
+          <h2 id="pageTitle">Vue d'ensemble</h2>
+          <p id="pageSubtitle">Supervision générale du département</p>
         </div>
-
-        <button
-          id="refreshButton"
-          class="button secondary"
-          type="button"
-        >
-          🔄 Actualiser
-        </button>
+        <div class="topbar-actions">
+          <div class="system-chip"><span></span><div><small>ÉTAT RÉSEAU</small><strong>Connecté</strong></div></div>
+          <button id="refreshButton" class="button secondary" type="button"><span class="refresh-symbol">↻</span> Actualiser</button>
+        </div>
       </header>
 
-      <div
-        id="notification"
-        class="notification hidden"
-      ></div>
+      <div id="notification" class="notification hidden"></div>
 
-      <!-- TABLEAU DE BORD -->
+      <section id="dashboardPage" class="page active">
+        <section class="command-hero">
+          <div class="hero-copy">
+            <span class="kicker">HMPD OPERATIONS / LIVE DATA</span>
+            <h3>Command Center</h3>
+            <p>Une vue instantanée des effectifs, performances et progressions du département.</p>
+          </div>
+          <div class="hero-radar" aria-hidden="true"><span></span><i></i><b></b></div>
+          <div class="hero-meta"><small>DERNIÈRE SYNCHRONISATION</small><strong id="lastSync">En attente…</strong></div>
+        </section>
 
-      <section
-        id="dashboardPage"
-        class="page active"
-      >
         <div class="stats-grid">
-          <article class="stat-card">
-            <div class="stat-icon">👮</div>
-
-            <div>
-              <span>Policiers</span>
-              <strong id="officerCount">0</strong>
-            </div>
+          <article class="stat-card stat-blue">
+            <div class="stat-top"><span class="stat-icon">♙</span><span class="stat-tag">EFFECTIF</span></div>
+            <div class="stat-value"><strong id="officerCount">0</strong><small>officiers</small></div>
+            <div class="stat-footer"><span class="mini-dot green"></span><span id="onlineOfficerSummary">Synchronisation Discord</span></div>
           </article>
-
-          <article class="stat-card">
-            <div class="stat-icon">⭐</div>
-
-            <div>
-              <span>Total des points</span>
-              <strong id="totalPoints">0</strong>
-            </div>
+          <article class="stat-card stat-gold">
+            <div class="stat-top"><span class="stat-icon">✦</span><span class="stat-tag">PERFORMANCE</span></div>
+            <div class="stat-value"><strong id="totalPoints">0</strong><small>points</small></div>
+            <div class="stat-footer">Points cumulés du département</div>
           </article>
-
-          <article class="stat-card">
-            <div class="stat-icon">📈</div>
-
-            <div>
-              <span>Moyenne</span>
-              <strong id="averagePoints">0</strong>
-            </div>
+          <article class="stat-card stat-cyan">
+            <div class="stat-top"><span class="stat-icon">↗</span><span class="stat-tag">MOYENNE</span></div>
+            <div class="stat-value"><strong id="averagePoints">0</strong><small>pts / agent</small></div>
+            <div class="stat-footer">Indice moyen de performance</div>
           </article>
-
-          <article class="stat-card">
-            <div class="stat-icon">🏆</div>
-
-            <div>
-              <span>Meilleur policier</span>
-              <strong id="bestOfficer">Aucun</strong>
-            </div>
+          <article class="stat-card stat-violet">
+            <div class="stat-top"><span class="stat-icon">♛</span><span class="stat-tag">TOP AGENT</span></div>
+            <div class="stat-value best"><strong id="bestOfficer">Aucun</strong></div>
+            <div class="stat-footer">Meilleure performance actuelle</div>
           </article>
         </div>
 
         <div class="dashboard-grid">
-          <article class="panel">
+          <article class="panel leaderboard-panel">
             <div class="panel-header">
-              <div>
-                <h3>Top policiers</h3>
-                <p>Classement actuel</p>
-              </div>
+              <div><span class="section-kicker">PERFORMANCE</span><h3>Top officiers</h3><p>Les meilleures performances actuelles</p></div>
+              <button class="ghost-link" type="button" data-jump-page="leaderboard">Voir tout <span>→</span></button>
             </div>
-
-            <div
-              id="dashboardLeaderboard"
-              class="ranking-list"
-            >
-              <div class="empty-state">
-                Chargement...
-              </div>
-            </div>
+            <div id="dashboardLeaderboard" class="ranking-list podium-list"><div class="empty-state"><span class="loader"></span> Chargement...</div></div>
           </article>
 
-          <article class="panel">
-            <div class="panel-header">
-              <div>
-                <h3>Répartition des grades</h3>
-                <p>Effectif par grade</p>
-              </div>
-            </div>
-
-            <div
-              id="gradeStatistics"
-              class="grade-list"
-            >
-              <div class="empty-state">
-                Chargement...
-              </div>
-            </div>
+          <article class="panel grade-panel">
+            <div class="panel-header"><div><span class="section-kicker">STRUCTURE</span><h3>Répartition des grades</h3><p>Composition de la hiérarchie HMPD</p></div><span class="panel-code">UNIT / 01</span></div>
+            <div id="gradeStatistics" class="grade-list"><div class="empty-state"><span class="loader"></span> Chargement...</div></div>
           </article>
         </div>
       </section>
 
-      <!-- POLICIERS -->
-
-      <section
-        id="officersPage"
-        class="page"
-      >
-        <article class="panel">
+      <section id="officersPage" class="page">
+        <section class="page-banner">
+          <div><span class="section-kicker">PERSONNEL DATABASE</span><h3>Registre des effectifs</h3><p>Consultez les profils, grades, points et historiques individuels.</p></div>
+          <div class="banner-count"><strong id="officerPageCount">—</strong><span>AGENTS</span></div>
+        </section>
+        <article class="panel officers-panel">
           <div class="panel-header officers-header">
-            <div>
-              <h3>Liste des policiers</h3>
-              <p>
-                Cliquez sur un policier pour ouvrir son profil
-              </p>
-            </div>
-
-            <input
-              id="officerSearch"
-              class="search-input"
-              type="search"
-              placeholder="Nom, pseudo, grade ou ID..."
-            >
+            <div><h3>Effectifs HMPD</h3><p>Cliquez sur un agent pour ouvrir son dossier</p></div>
+            <label class="search-box"><span>⌕</span><input id="officerSearch" class="search-input" type="search" placeholder="Rechercher nom, grade, ID..."></label>
           </div>
-
           <div class="table-wrapper">
             <table>
-              <thead>
-                <tr>
-                  <th>Position</th>
-                  <th>Policier</th>
-                  <th>Grade</th>
-                  <th>Points</th>
-                  <th>Mise à jour</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-
-              <tbody id="officersTableBody">
-                <tr>
-                  <td colspan="6">
-                    <div class="empty-state">
-                      Chargement...
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
+              <thead><tr><th>#</th><th>OFFICIER</th><th>GRADE</th><th>POINTS</th><th>MISE À JOUR</th><th></th></tr></thead>
+              <tbody id="officersTableBody"><tr><td colspan="6"><div class="empty-state"><span class="loader"></span> Chargement...</div></td></tr></tbody>
             </table>
           </div>
         </article>
       </section>
 
-      <!-- CLASSEMENT -->
-
-      <section
-        id="leaderboardPage"
-        class="page"
-      >
+      <section id="leaderboardPage" class="page">
+        <section class="page-banner ranking-banner">
+          <div><span class="section-kicker">HMPD PERFORMANCE INDEX</span><h3>Classement général</h3><p>Hiérarchie des performances selon le nombre de points accumulés.</p></div>
+          <div class="trophy-mark">♛</div>
+        </section>
         <article class="panel">
-          <div class="panel-header">
-            <div>
-              <h3>Classement HMPD</h3>
-              <p>
-                Classement par nombre de points
-              </p>
-            </div>
-          </div>
-
-          <div
-            id="fullLeaderboard"
-            class="ranking-list large"
-          >
-            <div class="empty-state">
-              Chargement...
-            </div>
-          </div>
+          <div class="panel-header"><div><h3>Leaderboard HMPD</h3><p>Classement officiel en temps réel</p></div><span class="live-badge">LIVE</span></div>
+          <div id="fullLeaderboard" class="ranking-list large"><div class="empty-state"><span class="loader"></span> Chargement...</div></div>
         </article>
       </section>
     </main>
   </div>
 
-  <!-- FENÊTRE PROFIL -->
-
-  <div
-    id="profileModal"
-    class="modal hidden"
-  >
-    <div
-      class="modal-overlay"
-      data-close-profile
-    ></div>
-
+  <div id="profileModal" class="modal hidden">
+    <div class="modal-overlay" data-close-profile></div>
     <div class="profile-modal">
-      <header class="modal-header">
-        <div>
-          <h3>Profil du policier</h3>
-          <p>Gestion complète des points</p>
-        </div>
-
-        <button
-          id="closeProfileButton"
-          class="close-button"
-          type="button"
-        >
-          ✕
-        </button>
-      </header>
-
-      <div id="profileContent">
-        <div class="empty-state">
-          Chargement...
-        </div>
-      </div>
+      <header class="modal-header"><div><span class="section-kicker">PERSONNEL FILE</span><h3>Dossier de l'officier</h3><p>Profil, progression et historique</p></div><button id="closeProfileButton" class="close-button" type="button">×</button></header>
+      <div id="profileContent"><div class="empty-state"><span class="loader"></span> Chargement...</div></div>
     </div>
   </div>
 
-  <!-- FORMULAIRE POINTS -->
-
-  <div
-    id="pointsModal"
-    class="modal hidden"
-  >
-    <div
-      class="modal-overlay"
-      data-close-points
-    ></div>
-
+  <div id="pointsModal" class="modal hidden">
+    <div class="modal-overlay" data-close-points></div>
     <div class="form-modal">
-      <header class="modal-header">
-        <div>
-          <h3 id="pointsModalTitle">
-            Modifier les points
-          </h3>
-
-          <p id="pointsOfficerName"></p>
-        </div>
-
-        <button
-          id="closePointsButton"
-          class="close-button"
-          type="button"
-        >
-          ✕
-        </button>
-      </header>
-
+      <header class="modal-header"><div><span class="section-kicker">PERFORMANCE ACTION</span><h3 id="pointsModalTitle">Modifier les points</h3><p id="pointsOfficerName"></p></div><button id="closePointsButton" class="close-button" type="button">×</button></header>
       <form id="pointsForm">
-        <input
-          id="pointsAction"
-          type="hidden"
-        >
-
-        <input
-          id="pointsUserId"
-          type="hidden"
-        >
-
-        <div class="form-group">
-          <label for="pointsAmount">
-            Nombre de points
-          </label>
-
-          <input
-            id="pointsAmount"
-            type="number"
-            min="1"
-            max="1000"
-            required
-            placeholder="Exemple : 10"
-          >
-        </div>
-
-        <div class="quick-points">
-          <button type="button" data-amount="1">
-            1
-          </button>
-
-          <button type="button" data-amount="5">
-            5
-          </button>
-
-          <button type="button" data-amount="10">
-            10
-          </button>
-
-          <button type="button" data-amount="25">
-            25
-          </button>
-
-          <button type="button" data-amount="50">
-            50
-          </button>
-        </div>
-
-        <div class="form-group">
-          <label for="pointsReason">
-            Raison
-          </label>
-
-          <textarea
-            id="pointsReason"
-            minlength="3"
-            maxlength="500"
-            required
-            placeholder="Exemple : Bonne activité en patrouille"
-          ></textarea>
-        </div>
-
-        <div
-          id="pointsFormError"
-          class="form-error hidden"
-        ></div>
-
-        <div class="form-actions">
-          <button
-            id="cancelPointsButton"
-            class="button secondary"
-            type="button"
-          >
-            Annuler
-          </button>
-
-          <button
-            id="submitPointsButton"
-            class="button"
-            type="submit"
-          >
-            Confirmer
-          </button>
-        </div>
+        <input id="pointsAction" type="hidden"><input id="pointsUserId" type="hidden">
+        <div class="form-group"><label for="pointsAmount">Nombre de points</label><input id="pointsAmount" type="number" min="1" max="1000" required placeholder="Exemple : 10"></div>
+        <div class="quick-points"><button type="button" data-amount="1">+1</button><button type="button" data-amount="5">+5</button><button type="button" data-amount="10">+10</button><button type="button" data-amount="25">+25</button><button type="button" data-amount="50">+50</button></div>
+        <div class="form-group"><label for="pointsReason">Motif de l'action</label><textarea id="pointsReason" minlength="3" maxlength="500" required placeholder="Exemple : Excellente activité en patrouille"></textarea></div>
+        <div id="pointsFormError" class="form-error hidden"></div>
+        <div class="form-actions"><button id="cancelPointsButton" class="button secondary" type="button">Annuler</button><button id="submitPointsButton" class="button" type="submit">Confirmer</button></div>
       </form>
     </div>
   </div>
 
-  <script src="/js/dashboard.js"></script>
+  <script src="/dashboard.js"></script>
 </body>
 </html>

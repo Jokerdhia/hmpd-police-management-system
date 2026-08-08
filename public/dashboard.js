@@ -56,6 +56,24 @@ const elements = {
   bestOfficer:
     document.querySelector("#bestOfficer"),
 
+  sidebarOfficerCount:
+    document.querySelector("#sidebarOfficerCount"),
+
+  sidebarOnlineCount:
+    document.querySelector("#sidebarOnlineCount"),
+
+  onlineOfficerSummary:
+    document.querySelector("#onlineOfficerSummary"),
+
+  officerPageCount:
+    document.querySelector("#officerPageCount"),
+
+  lastSync:
+    document.querySelector("#lastSync"),
+
+  breadcrumbCurrent:
+    document.querySelector("#breadcrumbCurrent"),
+
   dashboardLeaderboard:
     document.querySelector(
       "#dashboardLeaderboard"
@@ -292,6 +310,11 @@ function setPage(pageName) {
 
   elements.pageSubtitle.textContent =
     page.subtitle;
+
+  if (elements.breadcrumbCurrent) {
+    const labels = { dashboard: "COMMAND", officers: "PERSONNEL", leaderboard: "PERFORMANCE" };
+    elements.breadcrumbCurrent.textContent = labels[pageName] || "COMMAND";
+  }
 }
 
 function getPosition(index) {
@@ -366,10 +389,26 @@ function renderStatistics() {
 
   elements.bestOfficer.textContent =
     statistics.highestOfficer
-      ? `${getDisplayName(
-          statistics.highestOfficer
-        )} (${statistics.highestOfficer.points})`
+      ? `${getDisplayName(statistics.highestOfficer)} · ${statistics.highestOfficer.points} pts`
       : "Aucun";
+
+  const onlineCount = state.officers.filter((officer) => officer.is_in_server).length;
+
+  if (elements.sidebarOfficerCount) {
+    elements.sidebarOfficerCount.textContent = statistics.officers ?? state.officers.length ?? 0;
+  }
+
+  if (elements.sidebarOnlineCount) {
+    elements.sidebarOnlineCount.textContent = onlineCount;
+  }
+
+  if (elements.onlineOfficerSummary) {
+    elements.onlineOfficerSummary.textContent = `${onlineCount} présent${onlineCount > 1 ? "s" : ""} sur Discord`;
+  }
+
+  if (elements.officerPageCount) {
+    elements.officerPageCount.textContent = statistics.officers ?? state.officers.length ?? 0;
+  }
 }
 
 function renderGradeStatistics() {
@@ -528,6 +567,14 @@ async function loadData() {
     renderGradeStatistics();
     renderLeaderboards();
     renderOfficers();
+
+    if (elements.lastSync) {
+      elements.lastSync.textContent = new Intl.DateTimeFormat("fr-FR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      }).format(new Date());
+    }
   } catch (error) {
     console.error(error);
     showNotification(error.message);
@@ -1022,6 +1069,28 @@ elements.refreshButton.addEventListener(
   "click",
   loadData
 );
+
+for (const jumpButton of document.querySelectorAll("[data-jump-page]")) {
+  jumpButton.addEventListener("click", () => {
+    setPage(jumpButton.dataset.jumpPage);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+}
+
+function updateClock() {
+  const now = new Date();
+  const time = document.querySelector("#liveTime");
+  const date = document.querySelector("#liveDate");
+  if (time) {
+    time.textContent = new Intl.DateTimeFormat("fr-FR", { hour: "2-digit", minute: "2-digit" }).format(now);
+  }
+  if (date) {
+    date.textContent = new Intl.DateTimeFormat("fr-FR", { day: "2-digit", month: "short", year: "numeric" }).format(now).toUpperCase();
+  }
+}
+
+updateClock();
+window.setInterval(updateClock, 30000);
 
 elements.officerSearch.addEventListener(
   "input",
