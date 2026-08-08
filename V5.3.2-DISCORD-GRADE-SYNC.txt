@@ -1,9 +1,0 @@
-HMPD V5.3.2 — Discord Grade → Points Sync
-
-- Le grade Discord est la source de vérité.
-- Quand un rôle de grade change sur Discord, Neon est mis à jour automatiquement.
-- Les points sont réglés au montant de référence du nouveau grade :
-  Academy 0, Officer 10, Senior Officer 25, Sergeant 45, First Sergeant 70, Lieutenant 100, Captain 140, Commander 190, Deputy Chief 250, Assistant Chief 320, Vice Chief 400, Chief Police 500.
-- La synchronisation ne réécrit PAS les points toutes les 30/60 secondes si le grade n'a pas changé : les points d'activité peuvent donc continuer à évoluer normalement.
-- Un filet de sécurité périodique rattrape les changements manqués pendant un redémarrage.
-- Le retrait du rôle Police continue à supprimer complètement le dossier de la base.

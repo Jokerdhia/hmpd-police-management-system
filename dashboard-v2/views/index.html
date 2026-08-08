@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>HMPD MDT • Command Center V7.4</title>
-  <link rel="stylesheet" href="/css/style.css?v=7.4.0">
-  <link rel="stylesheet" href="/css/management.css?v=7.4.0">
+  <title>HMPD MDT • Command Center V7</title>
+  <link rel="stylesheet" href="/css/style.css?v=7.0.0">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -14,7 +13,7 @@
       <div class="brand">
         <div class="brand-mark"><img src="/images/harmony-police-logo.png" alt="Harmony Police"></div>
         <div class="brand-copy">
-          <strong>Police MDT <small class="version-badge">V7.4</small></strong>
+          <strong>Police MDT <small class="version-badge">V7</small></strong>
           <span>Harmony Police Department</span>
         </div>
       </div>
@@ -238,7 +237,7 @@
           <article class="stat-card"><div class="stat-icon">🧭</div><div><span>À surveiller</span><strong id="mgAttention">0</strong></div></article>
         </div>
         <div class="dashboard-grid">
-          <article class="panel smart-alert-panel"><div class="panel-head"><div><h2>Alertes intelligentes</h2><p>Détectées automatiquement à partir des données du MDT</p></div><span class="auto-badge"><i></i> Auto · 30 s</span></div><div id="managementAlerts" class="management-list smart-alert-list"></div></article>
+          <article class="panel"><div class="panel-head"><div><h2>Alertes intelligentes</h2><p>Éléments nécessitant une vérification</p></div></div><div id="managementAlerts" class="management-list"></div></article>
           <article class="panel"><div class="panel-head"><div><h2>Décisions de promotion</h2><p>Dossiers éligibles, en évaluation ou gelés nécessitant l’attention du High Command.</p></div></div><div id="promotionStatusTabs" class="promotion-tabs premium-tabs"><button data-promo-filter="eligible" class="active">Éligibles</button><button data-promo-filter="evaluation">Évaluation</button><button data-promo-filter="frozen">Gelées</button></div><div id="managementPromotions" class="management-list"></div></article>
         </div>
         <article class="panel panel-spaced"><div class="panel-head panel-head-responsive"><div><h2>Performance des policiers</h2><p>Score transparent sur 100 — aide à la décision uniquement</p></div><input id="managementSearch" class="search" type="search" placeholder="Rechercher un policier..."></div><div class="table-scroll"><table><thead><tr><th>Policier</th><th>Grade</th><th>Score</th><th>Service semaine</th><th>Discipline</th><th>Dernier service</th><th></th></tr></thead><tbody id="managementOfficerRows"></tbody></table></div></article>
@@ -329,6 +328,6 @@
 
   <script src="/js/dashboard.js?v=7.0.0"></script>
   <script src="/js/attendance.js?v=7.0.0"></script>
-  <script src="/js/management.js?v=7.4.0"></script>
+  <script src="/js/management.js?v=7.0.0"></script>
 </body>
 </html>

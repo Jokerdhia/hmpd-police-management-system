@@ -22,7 +22,7 @@
     n.textContent=msg;n.className=`toast ${ok?'success':'error'}`;
     notifyTimer=setTimeout(()=>n.classList.add('hidden'),4500);
   }
-  function clearError(){const n=$('#notification');if(!n)return;const generic=/^(erreur|une erreur est survenue\.?|service indisponible)/i.test((n.textContent||'').trim());if(n.classList.contains('error')||generic){n.classList.add('hidden');n.textContent='';n.className='toast hidden'}}
+  function clearError(){const n=$('#notification');if(n?.classList.contains('error'))n.classList.add('hidden')}
   function activityIcon(type){return {points:'⭐',attendance_start:'🟢',attendance_end:'⏹️',sanction:'⚠️',audit:'🧾'}[type]||'•'}
   function activityValue(a){if(a.type==='points'&&Number(a.value))return `<strong class="${Number(a.value)>0?'positive':'negative'}">${Number(a.value)>0?'+':''}${Number(a.value)}</strong>`;if(a.type==='attendance_end'&&Number(a.value)>0)return `<strong>${dur(a.value)}</strong>`;return ''}
   function renderRecentActivity(){
@@ -84,16 +84,7 @@
     $('#mgOnDuty').textContent=data.summary.onDuty;
     $('#mgAverageScore').textContent=data.summary.averageScore+'/100';
     $('#mgInactive').textContent=data.summary.inactive7;if($('#mgExcellent'))$('#mgExcellent').textContent=data.summary.excellent||0;if($('#mgAttention'))$('#mgAttention').textContent=data.summary.needsAttention||0;
-    const alertRows=Array.isArray(data.alerts)?data.alerts:[];
-    const grouped=[
-      {key:'inactive',icon:'⏱️',label:'Policiers inactifs depuis 7+ jours',severity:'high',items:alertRows.filter(a=>a.type==='inactive')},
-      {key:'discipline',icon:'⚠️',label:'Dossiers disciplinaires à vérifier',severity:'high',items:alertRows.filter(a=>a.type==='discipline')},
-      {key:'promotion',icon:'🎖️',label:'Policiers éligibles à une promotion',severity:'info',items:alertRows.filter(a=>a.type==='promotion')},
-      {key:'evaluation',icon:'🧠',label:'Évaluations RP à planifier',severity:'medium',items:alertRows.filter(a=>a.type==='evaluation')},
-      {key:'performance',icon:'⭐',label:'Excellentes performances détectées',severity:'info',items:alertRows.filter(a=>a.type==='performance')}
-    ].filter(g=>g.items.length);
-    const alertsBox=$('#managementAlerts');
-    if(alertsBox)alertsBox.innerHTML=grouped.map(g=>`<div class="smart-alert-card severity-${g.severity}"><span class="smart-alert-icon">${g.icon}</span><div class="smart-alert-main"><strong>${g.items.length} · ${esc(g.label)}</strong><p>${esc(g.items.slice(0,3).map(a=>data.officers.find(o=>o.user_id===a.user_id)?.display_name||a.user_id).join(' · '))}${g.items.length>3?' · …':''}</p></div><span class="smart-alert-badge">AUTO</span></div>`).join('')||'<div class="smart-alert-empty"><span>✅</span><div><strong>Aucune alerte critique</strong><p>Le système surveille automatiquement les effectifs, la discipline, les promotions et les évaluations RP.</p></div></div>';
+    $('#managementAlerts').innerHTML=data.alerts.map(a=>{const o=data.officers.find(x=>x.user_id===a.user_id);return `<button class="management-row severity-${a.severity}" data-mg-profile="${a.user_id}"><span>${a.severity==='high'?'🔴':a.severity==='medium'?'🟠':'🔵'}</span><div><strong>${esc(o?.display_name||a.user_id)}</strong><p>${esc(a.message)}</p></div></button>`}).join('')||'<div class="empty">Aucune alerte.</div>';
     renderRecentActivity();
     const cov=$('#coverageGrid');if(cov)cov.innerHTML=(data.coverage||[]).map(x=>`<div class="coverage-hour ${x.officers===0?'coverage-empty':x.officers<=2?'coverage-low':''}"><strong>${String(x.hour).padStart(2,'0')}h</strong><span>${x.officers}</span></div>`).join('');
     const list=data.officers.filter(o=>!q||String(o.display_name||'').toLowerCase().includes(q)||String(o.grade||'').toLowerCase().includes(q)||o.user_id.includes(q));

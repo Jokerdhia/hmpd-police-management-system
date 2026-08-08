@@ -1,8 +1,0 @@
-HMPD V5.3.1 — Profile Fix
-
-- Le grade Discord actuel est affiché directement sous le nom du policier.
-- Le profil ne plante plus entièrement si historique/notes/sanctions échouent.
-- Les appels secondaires sont chargés avec Promise.allSettled.
-- Le profil principal utilise les données déjà présentes dans le dashboard comme secours.
-- Le backend tolère une erreur temporaire Discord ou présence et retourne quand même le dossier principal.
-- Un avertissement discret indique les sections non chargées au lieu de masquer toute la fiche.

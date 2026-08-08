@@ -1,6 +1,0 @@
-HMPD V5.3.8 — POINTS / HIERARCHY FIX
-
-- Corrige l'erreur runtime « GRADES is not defined » pendant Ajouter/Retirer des points.
-- GRADES est maintenant importé correctement dans officerService.js.
-- La hiérarchie reste vérifiée côté serveur : High Grade peut modifier une cible de grade égal ou inférieur, jamais un grade supérieur.
-- Aucun changement des règles de promotion automatique : les points restent un indicateur d'activité.

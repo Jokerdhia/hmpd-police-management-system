@@ -1,6 +1,0 @@
-HMPD V5.4.1 — Self Protection
-
-- High Grade / High Command ne peut jamais modifier son propre dossier.
-- Blocage serveur des points, notes, sanctions, RP Quality, critères/promotions et actions de présence forcée sur soi-même.
-- Consultation de son propre profil reste autorisée.
-- La protection hiérarchique des grades supérieurs reste active.

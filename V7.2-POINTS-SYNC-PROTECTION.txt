@@ -1,9 +1,0 @@
-HMPD V7.2 - PROTECTION POINTS / SYNCHRONISATION DISCORD
-
-- Les points sont désormais strictement cumulatifs lors des changements de grade Discord.
-- Un changement de rôle Discord ne peut plus diminuer le total de points.
-- Si un grade Discord exige un seuil supérieur au total actuel, le total est seulement relevé au minimum du grade.
-- Une rétrogradation conserve les points de carrière déjà acquis.
-- La protection est appliquée aux deux chemins : événement Discord immédiat et synchronisation périodique.
-- Les changements de grade continuent de redémarrer l ancienneté du grade et de fermer les anciens dossiers de promotion ouverts.
-- Des tests automatiques vérifient les cas promotion, rétrogradation, seuil minimum et valeurs négatives.
