@@ -321,27 +321,63 @@ async function buildPersonalControlsPayload(interaction) {
   };
 }
 
-async function ensureAttendancePanel(client, forceNew = false) {
+let attendancePanelUpdatePromise = Promise.resolve();
+
+function isUnknownDiscordMessage(error) {
+  return Number(error?.code) === 10008 || /unknown message/i.test(String(error?.message || ""));
+}
+
+async function ensureAttendancePanelUnlocked(client, forceNew = false) {
   if (!ATTENDANCE_CHANNEL_ID) {
     console.warn("⚠️ ATTENDANCE_CHANNEL_ID absent : panneau de présence désactivé.");
     return null;
   }
+
   const channel = await fetchTextChannel(client, ATTENDANCE_CHANNEL_ID);
   if (!channel) throw new Error("Salon de présence introuvable ou non textuel.");
 
   const payload = await buildPanelPayload(client);
   let message = null;
+
   if (!forceNew) {
     const messageId = await getBotSetting(PANEL_SETTING_KEY);
-    if (messageId) message = await channel.messages.fetch(messageId).catch(() => null);
+    if (messageId) {
+      message = await channel.messages.fetch(messageId).catch((error) => {
+        if (!isUnknownDiscordMessage(error)) {
+          console.warn("⚠️ Lecture du panneau de présence impossible :", error?.message || error);
+        }
+        return null;
+      });
+    }
   }
+
   if (message) {
-    await message.edit(payload);
-    return message;
+    try {
+      await message.edit(payload);
+      return message;
+    } catch (error) {
+      // Le panneau a pu être supprimé entre le fetch et l'edit. Dans ce cas,
+      // on oublie l'ancien ID et on recrée automatiquement un panneau propre.
+      if (!isUnknownDiscordMessage(error)) throw error;
+      console.warn("⚠️ Ancien panneau de présence supprimé : recréation automatique.");
+      await setBotSetting(PANEL_SETTING_KEY, "");
+    }
   }
-  message = await channel.send(payload);
-  await setBotSetting(PANEL_SETTING_KEY, message.id);
-  return message;
+
+  const newMessage = await channel.send(payload);
+  await setBotSetting(PANEL_SETTING_KEY, newMessage.id);
+  return newMessage;
+}
+
+async function ensureAttendancePanel(client, forceNew = false) {
+  // Toutes les mises à jour passent dans une file unique afin d'éviter deux
+  // refresh simultanés qui éditent/recréent le même message Discord.
+  const operation = attendancePanelUpdatePromise.then(
+    () => ensureAttendancePanelUnlocked(client, forceNew),
+    () => ensureAttendancePanelUnlocked(client, forceNew)
+  );
+  attendancePanelUpdatePromise = operation.catch(() => null);
+  return operation;
 }
 
 async function refreshAttendancePanel(client) {
