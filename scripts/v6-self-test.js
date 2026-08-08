@@ -13,6 +13,13 @@ assert(grades.getGradeIndex('Chief Police')===11,'Chief Police doit être le der
 assert(grades.normalizeGradeName('Sergent')==='Sergeant','alias Sergent cassé');
 for(let i=1;i<grades.GRADES.length;i++)assert(grades.GRADES[i].points>=grades.GRADES[i-1].points,'barème points non croissant');
 
+
+const pointPolicy=require(path.join(root,'services/gradePointPolicy.js'));
+assert(pointPolicy.getPointsAfterGradeSync(52,45)===52,'sync Discord ne doit jamais réduire 52 pts vers 45');
+assert(pointPolicy.getPointsAfterGradeSync(20,45)===45,'sync Discord doit aligner au minimum du nouveau grade');
+assert(pointPolicy.getPointsAfterGradeSync(52,10)===52,'rétrogradation Discord ne doit pas effacer les points cumulés');
+assert(pointPolicy.getPointsAfterGradeSync(-5,10)===10,'politique points doit neutraliser les valeurs négatives');
+
 const guard=require(path.join(root,'services/gradeChangeGuard.js'));
 guard.markManagedGradeChange('123456789012345678',5000);
 assert(guard.isManagedGradeChange('123456789012345678'),'gradeChangeGuard ne protège pas une modification MDT');
@@ -35,6 +42,9 @@ assert(promotion.includes('closed_at'),'cycle carrière fermé absent');
 assert(promotion.includes("AT TIME ZONE 'Europe/Brussels'"),'calcul jours promotion sans timezone Bruxelles');
 const sync=read('dashboard-v2/services/roleSyncService.js');
 assert(sync.includes('isManagedGradeChange'),'sync Discord/MDT non protégé contre les courses');
+assert(sync.includes('getPointsAfterGradeSync'),'sync périodique ne protège pas les points cumulés');
+const bot=read('index.js');
+assert(bot.includes('getPointsAfterGradeSync'),'sync événement Discord ne protège pas les points cumulés');
 const attendance=read('dashboard-v2/dashboardDatabase.js');
 assert(attendance.includes('LEAST(s.effective_end,b.ends_at)'),'présence période non découpée aux limites');
 const auth=read('dashboard-v2/auth/auth.js');

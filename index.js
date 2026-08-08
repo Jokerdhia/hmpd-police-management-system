@@ -1,5 +1,6 @@
 require("dotenv").config();
 const { isManagedGradeChange } = require("./services/gradeChangeGuard");
+const { getPointsAfterGradeSync } = require("./services/gradePointPolicy");
 
 /*
 |--------------------------------------------------------------------------
@@ -703,16 +704,17 @@ async function synchronizeDiscordGradePoints(member, source = "modification Disc
   const officer = await getOfficer(member.id);
   const oldGrade = String(officer?.grade || "Academy");
   const oldPoints = Number(officer?.points || 0);
-  const newPoints = Number(discordGrade.points || 0);
+  const newPoints = getPointsAfterGradeSync(oldPoints, discordGrade.points);
 
   // Important : on ne resynchronise que lorsqu'il y a réellement un changement
   // de grade Discord. Les points peuvent ensuite évoluer librement comme score
   // d'activité sans être écrasés toutes les 30 secondes.
   if (oldGrade === discordGrade.name) return null;
 
-  // Le changement manuel de grade Discord est la source de vérité :
-  // on synchronise le grade + les points de référence et on redémarre
-  // l'ancienneté du nouveau grade pour le calcul des 7 journées validées.
+  // Le changement manuel de grade Discord reste une source de vérité pour le
+  // grade, mais jamais pour diminuer le score : les points HMPD sont cumulés.
+  // Si le nouveau grade a un seuil supérieur, on complète seulement jusqu'à
+  // ce minimum. L'ancienneté du nouveau grade est ensuite redémarrée.
   await updateOfficer(member.id, newPoints, discordGrade.name);
   try {
     const { pool } = require("./database");
@@ -758,7 +760,7 @@ async function synchronizeDiscordGradePoints(member, source = "modification Disc
     }
   }
 
-  console.log(`🔄 Grade Discord synchronisé : ${member.user?.tag || member.id} | ${oldGrade} (${oldPoints}) → ${discordGrade.name} (${newPoints} pts)`);
+  console.log(`🔄 Grade Discord synchronisé : ${member.user?.tag || member.id} | ${oldGrade} → ${discordGrade.name} | points ${oldPoints} → ${newPoints} (cumul protégés)`);
   return { oldGrade, newGrade: discordGrade.name, oldPoints, newPoints };
 }
 

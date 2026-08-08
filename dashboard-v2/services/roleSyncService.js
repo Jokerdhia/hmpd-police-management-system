@@ -15,6 +15,7 @@ const {
 const { invalidateOfficerCache } = require("./officerService");
 const { GRADES, getDiscordGradeFromRoles } = require("../config/grades");
 const { isManagedGradeChange } = require("../../services/gradeChangeGuard");
+const { getPointsAfterGradeSync } = require("../../services/gradePointPolicy");
 
 const POLICE_ROLE_IDS = String(process.env.ROLE_POLICE || "")
   .split(",")
@@ -99,14 +100,15 @@ async function syncPoliceRoles() {
       }
 
       // Filet de sécurité : si un événement Discord a été manqué pendant un
-      // redémarrage, le prochain cycle remet le grade + les points de référence.
+      // redémarrage, le prochain cycle resynchronise le grade. Les points sont
+      // cumulatifs : ils ne peuvent jamais diminuer à cause d'un rôle Discord.
       const discordGradeName = getDiscordGradeFromRoles(getMemberRoles(member));
       if (discordGradeName && String(officer?.grade || "") !== discordGradeName && !isManagedGradeChange(userId)) {
         const grade = GRADES.find((item) => item.name === discordGradeName);
         if (grade) {
           const oldGrade = String(officer?.grade || "Academy");
           const oldPoints = Number(officer?.points || 0);
-          const newPoints = Number(grade.points || 0);
+          const newPoints = getPointsAfterGradeSync(oldPoints, grade.points);
           await updateOfficer(userId, newPoints, grade.name);
           // Un changement de grade redémarre l'ancienneté de carrière.
           await pool.query(`UPDATE officers SET rank_started_at=CURRENT_TIMESTAMP,updated_at=CURRENT_TIMESTAMP WHERE user_id=$1`,[userId]).catch(()=>{});
@@ -169,7 +171,7 @@ async function syncPoliceRoles() {
 
     console.log(
       `✅ Synchronisation Police : ${policeMembers.length} actif(s), ` +
-      `${addedCount} ajouté(s), ${gradeSyncedCount} grade(s)/points synchronisé(s), ${deletedCount} supprimé(s) de la base.`
+      `${addedCount} ajouté(s), ${gradeSyncedCount} grade(s) synchronisé(s) (points cumulés protégés), ${deletedCount} supprimé(s) de la base.`
     );
   } catch (error) {
     console.error(
