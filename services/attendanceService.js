@@ -4,7 +4,6 @@ const {
   ButtonBuilder,
   ButtonStyle,
   MessageFlags,
-  PermissionFlagsBits,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
   ModalBuilder,
@@ -29,7 +28,10 @@ const ATTENDANCE_CHANNEL_ID = String(process.env.ATTENDANCE_CHANNEL_ID || "").tr
 const ATTENDANCE_LOG_CHANNEL_ID = String(process.env.ATTENDANCE_LOG_CHANNEL_ID || "").trim();
 const ATTENDANCE_REMARK_CHANNEL_ID = String(process.env.ATTENDANCE_REMARK_CHANNEL_ID || "").trim();
 const ROLE_POLICE_IDS = String(process.env.ROLE_POLICE || "").split(",").map(x=>x.trim()).filter(Boolean);
-const ROLE_HIGH_COMMAND = String(process.env.ROLE_HIGH_GRADE || process.env.ROLE_HIGH_COMMAND || "").trim();
+const ROLE_HIGH_COMMAND_IDS = String(process.env.ROLE_HIGH_GRADE || process.env.ROLE_HIGH_COMMAND || "")
+  .split(",")
+  .map((id) => id.trim())
+  .filter(Boolean);
 const { GRADES } = require("../dashboard-v2/config/grades");
 
 const PANEL_SETTING_KEY = "attendance_panel_message_id";
@@ -63,19 +65,15 @@ function memberIsPolice(member) {
   return Boolean(member?.roles?.cache && ROLE_POLICE_IDS.some(id=>member.roles.cache.has(id)));
 }
 
-function memberIsHighCommand(member, interaction) {
-  const hasRole = Boolean(
-    (ROLE_HIGH_COMMAND && member?.roles?.cache?.has(ROLE_HIGH_COMMAND)) ||
-    member?.roles?.cache?.some?.((role)=>/^(high[ _-]?(grade|command))$/i.test(String(role.name||'').trim()))
-  );
-
-  const isAdministrator = Boolean(
-    interaction?.memberPermissions?.has(
-      PermissionFlagsBits.Administrator
+function memberIsHighCommand(member) {
+  // Accès STRICTEMENT réservé au rôle Discord High Grade / High Command.
+  // Avoir la permission Discord "Administrateur" ne donne plus cet accès.
+  return Boolean(
+    ROLE_HIGH_COMMAND_IDS.some((roleId) => member?.roles?.cache?.has(roleId)) ||
+    member?.roles?.cache?.some?.((role) =>
+      /^(high[ _-]?(grade|command))$/i.test(String(role.name || "").trim())
     )
   );
-
-  return hasRole || isAdministrator;
 }
 
 function memberGradeIndex(member){
