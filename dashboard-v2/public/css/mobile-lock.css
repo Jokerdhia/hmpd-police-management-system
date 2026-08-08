@@ -1,0 +1,136 @@
+/*
+ * HMPD MOBILE UI LOCK v1.0
+ * Stable phone presentation. Loaded AFTER all desktop styles on purpose.
+ * Future desktop redesigns should not edit this file unless a mobile change is explicitly requested.
+ */
+@media (max-width: 800px) {
+  html, body { max-width: 100%; overflow-x: hidden; }
+  body { -webkit-text-size-adjust: 100%; }
+  .shell { display:block !important; min-height:100vh; }
+  .sidebar {
+    position:relative !important; inset:auto !important; width:100% !important; height:auto !important;
+    min-height:0 !important; padding:14px 12px 10px !important; border-right:0 !important;
+    border-bottom:1px solid var(--line) !important; z-index:20;
+  }
+  .brand { margin:0 0 12px !important; gap:10px !important; }
+  .brand-mark { width:44px !important; height:44px !important; border-radius:12px !important; }
+  .brand-copy strong { font-size:16px !important; }
+  .brand-copy span { font-size:10px !important; }
+  .nav {
+    display:flex !important; gap:7px !important; overflow-x:auto !important; overflow-y:hidden !important;
+    padding:2px 0 7px !important; scrollbar-width:none; -webkit-overflow-scrolling:touch;
+  }
+  .nav::-webkit-scrollbar { display:none; }
+  .nav:before { display:none !important; }
+  .nav-item {
+    flex:0 0 auto !important; min-height:42px !important; padding:10px 12px !important; border-radius:9px !important;
+    white-space:nowrap !important; font-size:12px !important; gap:7px !important;
+  }
+  .nav-item.active:before { display:none !important; }
+  .sidebar-user { margin:7px 0 0 !important; padding:9px 11px !important; border-radius:10px !important; }
+  .sidebar-user small { font-size:9px !important; }
+  .sidebar-user strong { font-size:11px !important; }
+
+  .main { width:100% !important; min-width:0 !important; padding:16px 12px 28px !important; }
+  .topbar { display:flex !important; flex-direction:column !important; align-items:stretch !important; gap:11px !important; margin-bottom:16px !important; padding-bottom:12px !important; }
+  .topbar h1 { font-size:24px !important; line-height:1.12 !important; }
+  .topbar p:not(.eyebrow) { font-size:12px !important; }
+  .eyebrow { font-size:9px !important; letter-spacing:1.25px !important; }
+  .topbar-actions { width:100% !important; display:grid !important; grid-template-columns:minmax(0,1fr) auto !important; gap:8px !important; }
+  .clock { min-width:0 !important; padding:10px 11px !important; font-size:11px !important; overflow:hidden; text-overflow:ellipsis; }
+  .btn, button { touch-action:manipulation; }
+  .btn { min-height:42px; }
+
+  .stats-grid, .attendance-stats, .management-stats, .command-summary-grid, .priority-grid {
+    grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:9px !important;
+  }
+  .stat-card { min-height:94px !important; padding:13px !important; border-radius:10px !important; gap:10px !important; }
+  .stat-icon { width:39px !important; height:39px !important; border-radius:10px !important; font-size:18px !important; }
+  .stat-card span { font-size:10px !important; margin-bottom:4px !important; }
+  .stat-card strong { font-size:19px !important; }
+
+  .dashboard-grid, .attendance-grid, .promotion-center-grid, .promo-two-col, .command-audit-grid {
+    grid-template-columns:1fr !important; gap:12px !important;
+  }
+  .panel, .promotion-page-hero, .management-hero { border-radius:10px !important; box-shadow:none !important; }
+  .panel-spaced { margin-top:12px !important; }
+  .panel-head { padding:14px !important; gap:10px !important; }
+  .panel-head h2 { font-size:16px !important; }
+  .panel-head p { font-size:10px !important; }
+  .panel-head-responsive { align-items:stretch !important; flex-direction:column !important; }
+  .search { width:100% !important; max-width:none !important; min-height:42px !important; font-size:12px !important; }
+
+  .table-scroll { width:100% !important; overflow:auto !important; -webkit-overflow-scrolling:touch; }
+  table { min-width:760px !important; }
+  th, td { padding:12px 13px !important; font-size:12px !important; }
+  th { font-size:9px !important; }
+
+  .chart-wrap, .chart-wide { height:235px !important; padding:12px !important; }
+  .ranking-list, .ranking-large, .activity-feed { padding:10px !important; }
+  .ranking-item { grid-template-columns:36px minmax(0,1fr) auto !important; padding:10px !important; gap:9px !important; }
+  .officer-avatar { width:38px !important; height:38px !important; flex-basis:38px !important; }
+  .officer-name strong { font-size:12px !important; }
+  .officer-name span { font-size:10px !important; }
+
+  .activity-entry { grid-template-columns:1fr !important; gap:5px !important; padding:11px !important; }
+
+  /* High Command: compact, touch-friendly, no giant desktop canvas on phones. */
+  .management-hero, .promotion-page-hero { padding:14px !important; align-items:flex-start !important; flex-direction:column !important; }
+  .command-hero-actions { width:100% !important; justify-content:flex-start !important; flex-wrap:wrap !important; }
+  .command-tabs, .premium-tabs {
+    display:flex !important; grid-template-columns:none !important; flex-wrap:nowrap !important; gap:7px !important;
+    overflow-x:auto !important; overflow-y:hidden !important; padding:1px 0 8px !important; scrollbar-width:none; -webkit-overflow-scrolling:touch;
+  }
+  .command-tabs::-webkit-scrollbar, .premium-tabs::-webkit-scrollbar { display:none; }
+  .command-tabs button, .premium-tabs button {
+    flex:0 0 auto !important; width:auto !important; min-width:max-content !important; min-height:43px !important;
+    padding:9px 12px !important; border-radius:9px !important; font-size:11px !important; white-space:nowrap !important;
+  }
+  .command-tabs button small { display:none !important; }
+  .command-section { min-width:0 !important; }
+  .command-activity-row { grid-template-columns:34px minmax(0,1fr) !important; gap:9px !important; padding:11px !important; }
+  .command-activity-icon { width:32px !important; height:32px !important; border-radius:8px !important; }
+  .command-activity-side { grid-column:2 !important; text-align:left !important; justify-items:start !important; }
+  .command-activity-main strong { font-size:12px !important; }
+  .command-activity-main span { font-size:11px !important; }
+  .command-activity-main small { font-size:9px !important; }
+  .command-live small { text-align:left !important; }
+  .audit-filters { justify-content:flex-start !important; overflow-x:auto !important; flex-wrap:nowrap !important; padding-bottom:5px !important; }
+  .audit-filters .btn, .audit-filters button { flex:0 0 auto !important; }
+
+  /* Promotion/profile modal becomes a true phone sheet. */
+  .modal { padding:0 !important; align-items:end !important; }
+  .modal-card, .promotion-modal-card {
+    width:100% !important; max-width:none !important; max-height:96dvh !important; border-radius:16px 16px 0 0 !important;
+    border-left:0 !important; border-right:0 !important; border-bottom:0 !important;
+  }
+  .modal-head { padding:14px !important; }
+  .modal-head h2 { font-size:18px !important; }
+  .profile-hero { padding:15px !important; gap:12px !important; }
+  .profile-avatar { width:62px !important; height:62px !important; }
+  .profile-hero h3 { font-size:19px !important; }
+  .profile-grid, .profile-actions, .mg-profile-stats { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:8px !important; padding-left:14px !important; padding-right:14px !important; }
+  .profile-card { padding:11px !important; }
+  .tabs { flex-wrap:nowrap !important; overflow-x:auto !important; padding:0 14px 12px !important; scrollbar-width:none; }
+  .tabs::-webkit-scrollbar { display:none; }
+  .tab { flex:0 0 auto !important; min-height:40px !important; }
+  .tab-panel { padding:0 14px 18px !important; }
+  .promotion-header-card, .promotion-header-card.pro { grid-template-columns:1fr !important; gap:10px !important; }
+  .promo-percent { text-align:left !important; }
+  .promo-overview, .promo-stats-grid, .promo-general-grid, .promotion-criteria, .attendance-day-grid { grid-template-columns:1fr !important; }
+  .rp-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; }
+  .promo-actions { display:grid !important; grid-template-columns:1fr !important; }
+  .promo-actions .btn, .promo-approve { width:100% !important; min-width:0 !important; margin-left:0 !important; }
+  .sanction-create, .sanction-create-grid { grid-template-columns:1fr !important; }
+  .sanction-row { align-items:flex-start !important; flex-direction:column !important; }
+
+  input, select, textarea { font-size:16px !important; } /* prevents iOS zoom */
+}
+
+@media (max-width: 480px) {
+  .main { padding-left:10px !important; padding-right:10px !important; }
+  .stats-grid, .attendance-stats, .management-stats, .command-summary-grid, .priority-grid { grid-template-columns:1fr !important; }
+  .profile-grid, .profile-actions, .mg-profile-stats, .rp-grid { grid-template-columns:1fr !important; }
+  .topbar-actions { grid-template-columns:1fr !important; }
+  .clock { text-align:center; }
+}
