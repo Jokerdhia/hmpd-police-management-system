@@ -1,0 +1,11 @@
+HMPD MDT V7.3 — COMMAND CENTER LIVE
+
+- Correction de la bannière générique « Erreur ».
+- Les modules secondaires (audit / rapport) n'empêchent plus le Command Center de fonctionner.
+- Alertes intelligentes recalculées automatiquement toutes les 30 secondes lorsque la page Commandement est ouverte.
+- Activité récente ajoutée en bas du Centre de commandement.
+- Activité alimentée par : points, prises de service, fins de service, sanctions et audit administratif.
+- Heure de dernière mise à jour affichée.
+- Cartes du Command Center réorganisées en 3 colonnes pour éviter le débordement horizontal.
+- Les points cumulés restent protégés par la V7.2.
+- npm run verify : OK.

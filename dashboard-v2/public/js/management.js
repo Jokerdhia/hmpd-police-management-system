@@ -4,7 +4,7 @@
   const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const dur=s=>`${Math.floor(Number(s||0)/3600)}h ${String(Math.floor(Number(s||0)%3600/60)).padStart(2,'0')}m`;
   const dt=v=>v?new Date(v).toLocaleString('fr-FR'):'Jamais';
-  let data=null,promotions=[],permissions={},promoFilter='eligible',promoPageFilter='all',promoSearch='',promoPage=1,promoPageSize=12,selectedPromotionUser=null;
+  let data=null,promotions=[],permissions={},promoFilter='eligible',promoPageFilter='all',promoSearch='',promoPage=1,promoPageSize=12,selectedPromotionUser=null,managementTimer=null,notifyTimer=null;
 
   async function req(url,options={}){
     const init={cache:'no-store',...options};
@@ -13,12 +13,23 @@
       init.body=JSON.stringify(init.body);
     }
     const r=await fetch(url,init),d=await r.json().catch(()=>null);
-    if(!r.ok||!d?.success)throw new Error(d?.message||'Erreur');
+    if(!r.ok||!d?.success)throw new Error(d?.message||`Service indisponible (${r.status||'réseau'})`);
     return d;
   }
   function notify(msg,ok=true){
     const n=$('#notification'); if(!n)return alert(msg);
-    n.textContent=msg;n.className=`toast${ok?' success':''}`;setTimeout(()=>n.classList.add('hidden'),4500);
+    if(notifyTimer)clearTimeout(notifyTimer);
+    n.textContent=msg;n.className=`toast ${ok?'success':'error'}`;
+    notifyTimer=setTimeout(()=>n.classList.add('hidden'),4500);
+  }
+  function clearError(){const n=$('#notification');if(n?.classList.contains('error'))n.classList.add('hidden')}
+  function activityIcon(type){return {points:'⭐',attendance_start:'🟢',attendance_end:'⏹️',sanction:'⚠️',audit:'🧾'}[type]||'•'}
+  function activityValue(a){if(a.type==='points'&&Number(a.value))return `<strong class="${Number(a.value)>0?'positive':'negative'}">${Number(a.value)>0?'+':''}${Number(a.value)}</strong>`;if(a.type==='attendance_end'&&Number(a.value)>0)return `<strong>${dur(a.value)}</strong>`;return ''}
+  function renderRecentActivity(){
+    const box=$('#managementRecentActivity');if(!box)return;
+    const rows=data?.recentActivity||[];
+    box.innerHTML=rows.map(a=>`<div class="command-activity-row"><span class="command-activity-icon">${activityIcon(a.type)}</span><div class="command-activity-main"><strong>${esc(a.display_name||a.user_id||'Système')}</strong><span>${esc(a.title||'Activité')}</span><small>${esc(a.detail||'')}</small></div><div class="command-activity-side">${activityValue(a)}<time>${dt(a.created_at)}</time></div></div>`).join('')||'<div class="empty">Aucune activité récente.</div>';
+    const last=$('#managementLastUpdate');if(last)last.textContent=`Mis à jour ${new Date(data?.generatedAt||Date.now()).toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}`;
   }
   function scoreBar(o){return `<div class="score-cell"><strong>${o.score.total}/100</strong><div class="score-track"><i style="width:${o.score.total}%"></i></div><small>${esc(o.score.label)}</small></div>`}
   function statusMeta(status){
@@ -74,19 +85,36 @@
     $('#mgAverageScore').textContent=data.summary.averageScore+'/100';
     $('#mgInactive').textContent=data.summary.inactive7;if($('#mgExcellent'))$('#mgExcellent').textContent=data.summary.excellent||0;if($('#mgAttention'))$('#mgAttention').textContent=data.summary.needsAttention||0;
     $('#managementAlerts').innerHTML=data.alerts.map(a=>{const o=data.officers.find(x=>x.user_id===a.user_id);return `<button class="management-row severity-${a.severity}" data-mg-profile="${a.user_id}"><span>${a.severity==='high'?'🔴':a.severity==='medium'?'🟠':'🔵'}</span><div><strong>${esc(o?.display_name||a.user_id)}</strong><p>${esc(a.message)}</p></div></button>`}).join('')||'<div class="empty">Aucune alerte.</div>';
+    renderRecentActivity();
     const cov=$('#coverageGrid');if(cov)cov.innerHTML=(data.coverage||[]).map(x=>`<div class="coverage-hour ${x.officers===0?'coverage-empty':x.officers<=2?'coverage-low':''}"><strong>${String(x.hour).padStart(2,'0')}h</strong><span>${x.officers}</span></div>`).join('');
     const list=data.officers.filter(o=>!q||String(o.display_name||'').toLowerCase().includes(q)||String(o.grade||'').toLowerCase().includes(q)||o.user_id.includes(q));
     $('#managementOfficerRows').innerHTML=list.map(o=>`<tr><td><strong>${esc(o.display_name||o.user_id)}</strong><small class="table-sub">${o.user_id}</small></td><td><span class="grade-pill">${esc(o.grade)}</span></td><td>${scoreBar(o)}</td><td>${dur(o.week_seconds)}</td><td>${o.active_sanctions?`⚠️ ${o.active_sanctions} sanction(s)`:'✅ RAS'}</td><td>${o.inactive_days===999?'Jamais':o.inactive_days+' j'}</td><td><button class="profile-button" data-promotion-user="${o.user_id}">Promotion</button></td></tr>`).join('')||'<tr><td colspan="7"><div class="empty">Aucun résultat.</div></td></tr>';
   }
   function reportText(r){return [`RAPPORT HEBDOMADAIRE HMPD`,`Généré : ${new Date(r.generatedAt).toLocaleString('fr-FR')}`,``,`Effectif : ${r.summary.officers} | En service : ${r.summary.onDuty} | Score moyen : ${r.summary.averageScore}/100`,`Dossiers éligibles : ${promotions.filter(p=>p.status==='eligible').length} | Inactifs 7j+ : ${r.summary.inactive7}`,``,`TOP PRÉSENCE`,...r.topAttendance.map((o,i)=>`${i+1}. ${o.display_name||o.user_id} — ${dur(o.week_seconds)} — score ${o.score}/100`),``,`PROMOTIONS ÉLIGIBLES`,...(promotions.filter(p=>p.status==='eligible').length?promotions.filter(p=>p.status==='eligible').map(p=>`• ${p.display_name||p.user_id} → ${p.to_grade} (${p.progress.percent}%)`):['• Aucune']),``,`INACTIFS`,...(r.inactive.length?r.inactive.map(o=>`• ${o.display_name||o.user_id} — ${o.inactive_days} jours`):['• Aucun'])].join('\n')}
 
-  async function load(){
+  async function load({silent=false}={}){
+    const refresh=$('#managementRefresh');if(refresh)refresh.disabled=true;
     try{
-      const [ov,audit,rep,pro]=await Promise.all([req('/api/management/overview'),req('/api/management/audit?limit=50'),req('/api/management/weekly-report'),req('/api/promotions')]);
-      data=ov;promotions=pro.promotions||[];render($('#managementSearch')?.value||'');renderPromotions();
-      $('#weeklyReport').textContent=reportText(rep.report);
-      $('#managementAudit').innerHTML=audit.audit.map(x=>`<div class="management-row static"><span>🧾</span><div><strong>${esc(x.action)}</strong><p>${esc(x.actor_id)} → ${esc(x.target_id||'système')} · ${dt(x.created_at)}</p></div></div>`).join('')||'<div class="empty">Aucun audit.</div>';
-    }catch(e){notify(e.message,false)}
+      const results=await Promise.allSettled([req('/api/management/overview'),req('/api/management/audit?limit=50'),req('/api/management/weekly-report'),req('/api/promotions')]);
+      const [ovR,auditR,repR,proR]=results;
+      if(ovR.status!=='fulfilled')throw ovR.reason;
+      data=ovR.value;
+      if(proR.status==='fulfilled')promotions=proR.value.promotions||[];
+      render($('#managementSearch')?.value||'');renderPromotions();clearError();
+      if(repR.status==='fulfilled')$('#weeklyReport').textContent=reportText(repR.value.report);
+      else if($('#weeklyReport'))$('#weeklyReport').textContent='Rapport temporairement indisponible — les données principales restent actives.';
+      if(auditR.status==='fulfilled')$('#managementAudit').innerHTML=auditR.value.audit.map(x=>`<div class="management-row static"><span>🧾</span><div><strong>${esc(x.action)}</strong><p>${esc(x.actor_id)} → ${esc(x.target_id||'système')} · ${dt(x.created_at)}</p></div></div>`).join('')||'<div class="empty">Aucun audit.</div>';
+      else if($('#managementAudit'))$('#managementAudit').innerHTML='<div class="empty">Audit temporairement indisponible.</div>';
+      const optionalFailed=results.slice(1).filter(x=>x.status==='rejected').length;
+      if(optionalFailed&&!silent)console.warn(`Command Center: ${optionalFailed} module(s) secondaire(s) indisponible(s).`);
+    }catch(e){
+      if(!silent)notify(`Centre de commandement indisponible : ${e.message}`,false);
+      else console.warn('Actualisation automatique impossible :',e.message);
+    }finally{if(refresh)refresh.disabled=false}
+  }
+  function startManagementAutoRefresh(){
+    if(managementTimer)clearInterval(managementTimer);
+    managementTimer=setInterval(()=>{if($('#managementPage')?.classList.contains('active'))load({silent:true})},30000);
   }
 
   async function timeline(id){
@@ -175,6 +203,7 @@
       $('#promotionSearch')?.addEventListener('input',e=>{promoSearch=e.target.value.trim();promoPage=1;renderPromotions()});$('#promotionPrevPage')?.addEventListener('click',()=>{promoPage=Math.max(1,promoPage-1);renderPromotions()});$('#promotionNextPage')?.addEventListener('click',()=>{promoPage+=1;renderPromotions()});
       document.addEventListener('click',e=>{const t=e.target.closest('[data-mg-profile]');if(t)timeline(t.dataset.mgProfile);const p=e.target.closest('[data-promotion-user]');if(p)openPromotion(p.dataset.promotionUser);if(e.target.closest('[data-close-promotion],#closePromotionButton'))closePromotion();if(e.target.closest('#saveRpEvaluation'))saveEvaluation();if(e.target.closest('#addSanctionButton'))addSanction();const ss=e.target.closest('[data-sanction-status]');if(ss)sanctionStatus(ss.dataset.sanctionId,ss.dataset.sanctionStatus);const sd=e.target.closest('[data-sanction-delete]');if(sd)deleteSanctionAction(sd.dataset.sanctionDelete);const a=e.target.closest('[data-promo-action]');if(a&&!a.disabled)promotionAction(a.dataset.promoAction)});
       document.addEventListener('change',e=>{if(e.target.matches('[data-criterion-key]'))updateCriterion(e.target)});
+      startManagementAutoRefresh();
     }catch{}
   }
   init();

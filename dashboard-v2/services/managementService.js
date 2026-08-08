@@ -75,7 +75,45 @@ async function getManagementSnapshot(){
   const active=await pool.query(`SELECT COUNT(*)::int total,COUNT(*) FILTER(WHERE paused_at IS NOT NULL)::int paused FROM attendance_sessions WHERE ended_at IS NULL`);
   const coverageRows=(await pool.query(`SELECT EXTRACT(HOUR FROM started_at AT TIME ZONE 'Europe/Brussels')::int AS hour_of_day, COUNT(DISTINCT user_id)::int AS officers FROM attendance_sessions WHERE started_at >= CURRENT_TIMESTAMP - interval '30 days' GROUP BY 1 ORDER BY 1`)).rows;
   const coverage=Array.from({length:24},(_,hour)=>({hour,officers:Number(coverageRows.find(x=>Number(x.hour_of_day)===hour)?.officers||0)}));
-  return {officers,alerts:alerts.slice(0,100),coverage,summary:{officers:officers.length,onDuty:Number(active.rows[0]?.total||0),paused:Number(active.rows[0]?.paused||0),inactive7:officers.filter(o=>o.inactive_days>=7).length,promotionEligible:officers.filter(o=>o.promotion_eligible).length,averageScore:officers.length?Math.round(officers.reduce((a,o)=>a+o.score.total,0)/officers.length):0,excellent:officers.filter(o=>o.score.total>=90).length,needsAttention:officers.filter(o=>o.score.total<50||o.inactive_days>=7||o.active_sanctions>0).length}};
+  const recentActivity=await getRecentCommandActivity(24);
+  return {officers,alerts:alerts.slice(0,100),coverage,recentActivity,generatedAt:new Date().toISOString(),summary:{officers:officers.length,onDuty:Number(active.rows[0]?.total||0),paused:Number(active.rows[0]?.paused||0),inactive7:officers.filter(o=>o.inactive_days>=7).length,promotionEligible:officers.filter(o=>o.promotion_eligible).length,averageScore:officers.length?Math.round(officers.reduce((a,o)=>a+o.score.total,0)/officers.length):0,excellent:officers.filter(o=>o.score.total>=90).length,needsAttention:officers.filter(o=>o.score.total<50||o.inactive_days>=7||o.active_sanctions>0).length}};
+}
+
+async function getRecentCommandActivity(limit=24){
+  await ready;
+  const max=Math.min(Math.max(parseInt(limit,10)||24,1),60);
+  const items=[];
+  const add=(rows,type,title,detail,valueFn=null)=>{
+    for(const row of rows||[])items.push({
+      type, user_id:String(row.user_id||row.target_id||''), title:title(row), detail:detail(row),
+      value:valueFn?valueFn(row):null, created_at:row.created_at
+    });
+  };
+
+  const [points,starts,ends,sanctions,auditRows]=await Promise.all([
+    pool.query(`SELECT user_id,action,amount,reason,moderator_id,created_at FROM points_history ORDER BY created_at DESC LIMIT $1`,[max]).catch(()=>({rows:[]})),
+    pool.query(`SELECT user_id,started_by,created_at FROM (SELECT user_id,started_by,started_at AS created_at FROM attendance_sessions ORDER BY started_at DESC LIMIT $1) x`,[max]).catch(()=>({rows:[]})),
+    pool.query(`SELECT user_id,ended_by,end_reason,duration_seconds,created_at FROM (SELECT user_id,ended_by,end_reason,duration_seconds,ended_at AS created_at FROM attendance_sessions WHERE ended_at IS NOT NULL ORDER BY ended_at DESC LIMIT $1) x`,[max]).catch(()=>({rows:[]})),
+    pool.query(`SELECT user_id,sanction_type,reason,author_id,created_at FROM officer_sanctions ORDER BY created_at DESC LIMIT $1`,[max]).catch(()=>({rows:[]})),
+    pool.query(`SELECT actor_id,target_id,action,details,created_at FROM admin_audit_log ORDER BY created_at DESC LIMIT $1`,[max]).catch(()=>({rows:[]}))
+  ]);
+
+  add(points.rows,'points',r=>r.action==='add'?`+${Number(r.amount||0)} points`:`-${Number(r.amount||0)} points`,r=>r.reason||'Modification des points',r=>Number(r.amount||0)*(r.action==='add'?1:-1));
+  add(starts.rows,'attendance_start',()=>`Prise de service`,r=>r.started_by&&r.started_by!==r.user_id?`Service démarré par ${r.started_by}`:'Service démarré');
+  add(ends.rows,'attendance_end',()=>`Fin de service`,r=>r.end_reason||'Service terminé',r=>Number(r.duration_seconds||0));
+  add(sanctions.rows,'sanction',r=>`Sanction · ${r.sanction_type}`,r=>r.reason||'Sanction enregistrée');
+  for(const r of auditRows.rows||[])items.push({type:'audit',user_id:String(r.target_id||''),title:String(r.action||'Action administrative'),detail:`Par ${r.actor_id||'SYSTEM'}`,value:null,created_at:r.created_at});
+
+  const ids=[...new Set(items.map(x=>x.user_id).filter(Boolean))];
+  const names=new Map();
+  if(ids.length){
+    try{
+      const basic=ids.map(user_id=>({user_id}));
+      const enriched=await enrichOfficers(basic);
+      for(const o of enriched||[])names.set(String(o.user_id),o.display_name||o.username||String(o.user_id));
+    }catch{}
+  }
+  return items.filter(x=>x.created_at).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at)).slice(0,max).map(x=>({...x,display_name:names.get(x.user_id)||x.user_id||'Système'}));
 }
 
 async function getWeeklyPerformanceWinner(){
