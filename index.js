@@ -1331,21 +1331,27 @@ async function shutdownBot(signal) {
   process.exit(0);
 }
 
-process.on("SIGINT", () => {
-  void shutdownBot("SIGINT");
-});
+// En lancement autonome (`npm run bot`), le bot gère lui-même son arrêt.
+// Sur Render, start-render.js lance aussi le dashboard dans ce même processus :
+// les signaux sont alors gérés uniquement par dashboard-v2/server.js pour éviter
+// deux fermetures simultanées du même pool PostgreSQL.
+if (process.env.HMPD_UNIFIED_PROCESS !== "true") {
+  process.on("SIGINT", () => {
+    void shutdownBot("SIGINT");
+  });
 
-process.on("SIGTERM", () => {
-  void shutdownBot("SIGTERM");
-});
+  process.on("SIGTERM", () => {
+    void shutdownBot("SIGTERM");
+  });
 
-process.on("unhandledRejection", (error) => {
-  console.error("❌ Promesse rejetée :", error);
-});
+  process.on("unhandledRejection", (error) => {
+    console.error("❌ Promesse rejetée :", error);
+  });
 
-process.on("uncaughtException", (error) => {
-  console.error("❌ Erreur non capturée :", error);
-});
+  process.on("uncaughtException", (error) => {
+    console.error("❌ Erreur non capturée :", error);
+  });
+}
 
 /*
 |--------------------------------------------------------------------------
