@@ -283,7 +283,7 @@ app.get("/healthz", (request, response) => {
     success: readyForTraffic,
     status: readyForTraffic ? "online" : "starting",
     service: "hmpd-dashboard",
-    version: "7.2.1",
+    version: "7.2.2",
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
   });
@@ -310,7 +310,7 @@ app.get(
     return response.status(healthy ? 200 : 503).json({
       success: healthy,
       status: healthy ? "online" : "degraded",
-      version: "7.2.1",
+      version: "7.2.2",
       dashboard: "HMPD V7 Command Center",
       oauthEnabled,
       database,

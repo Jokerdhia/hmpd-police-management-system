@@ -1,34 +1,47 @@
 (()=>{
-const q=s=>document.querySelector(s);let data=null,chart=null,selectedOfficer=null,currentFilter="active",searchTerm="",lastUpdatedAt=null,previousStatuses=new Map(),firstLoad=true,loadRunning=false;
+const q=s=>document.querySelector(s);let data=null,chart=null,selectedOfficer=null,currentFilter="active",searchTerm="",lastUpdatedAt=null,previousStatuses=new Map(),firstLoad=true,loadRunning=false,reconnectTimer=null,attendanceDisconnected=false;
 const fmt=s=>{s=Math.max(0,Number(s)||0);const h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?`${h} h ${String(m).padStart(2,"0")} min`:`${m} min`};
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 const status=o=>o.attendance_status==="active"?["🟢 En service","status-active"]:o.attendance_status==="paused"?["☕ En pause","status-paused"]:["⚫ Hors service","status-offline"];
 
-async function attendanceApi(url,options={},retry=true){
-  let response;
-  try{response=await fetch(url,options)}catch(error){
-    if(retry){await new Promise(r=>setTimeout(r,700));return attendanceApi(url,options,false)}
-    throw new Error("Serveur temporairement indisponible. Réessaie dans quelques secondes.");
-  }
-  const contentType=String(response.headers.get("content-type")||"").toLowerCase();
-  const text=await response.text();
-  let payload=null;
-  if(contentType.includes("application/json")||text.trim().startsWith("{")||text.trim().startsWith("[")){
-    try{payload=JSON.parse(text)}catch{}
-  }
-  if(!payload){
+const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+async function attendanceApi(url,options={}){
+  const method=String(options.method||"GET").toUpperCase();
+  // Ne jamais rejouer automatiquement une action : une réponse perdue ne doit
+  // pas doubler une prise de service, une pause ou une pénalité.
+  const maxAttempts=(method==="GET"||method==="HEAD")?4:1;
+  const delays=[900,1800,3500];
+  let lastError=null;
+  for(let attempt=0;attempt<maxAttempts;attempt++){
+    let response;
+    try{
+      response=await fetch(url,{...options,cache:method==="GET"?"no-store":options.cache});
+    }catch(error){
+      lastError=Object.assign(new Error("Serveur temporairement indisponible. Reconnexion automatique…"),{transient:true,cause:error});
+      if(attempt<maxAttempts-1){await wait(delays[attempt]);continue}
+      throw lastError;
+    }
+    const contentType=String(response.headers.get("content-type")||"").toLowerCase();
+    const text=await response.text();
+    let payload=null;
+    if(contentType.includes("application/json")||text.trim().startsWith("{")||text.trim().startsWith("[")){
+      try{payload=JSON.parse(text)}catch{}
+    }
+    if(response.status===401||response.status===403){
+      location.replace(payload?.loginUrl||"/login");
+      throw new Error("Session expirée. Reconnexion en cours…");
+    }
     const looksHtml=/^\s*<!doctype|^\s*<html/i.test(text);
-    const transient=[502,503,504].includes(response.status)||looksHtml;
-    if(retry&&transient){await new Promise(r=>setTimeout(r,700));return attendanceApi(url,options,false)}
-    if(response.status===401||response.status===403){location.href="/login";throw new Error("Session expirée. Reconnexion en cours…")}
-    console.error("Réponse API Présence non JSON",{url,status:response.status,contentType,preview:text.slice(0,160)});
-    throw new Error(looksHtml?"Réponse temporaire invalide du serveur. Actualise dans quelques secondes.":`Erreur serveur (${response.status||"réseau"}).`);
+    const transient=[429,502,503,504].includes(response.status)||looksHtml||!payload;
+    if(transient&&attempt<maxAttempts-1){await wait(delays[attempt]);continue}
+    if(!payload){
+      console.error("Réponse API Présence non JSON",{url,status:response.status,contentType,preview:text.slice(0,160)});
+      throw Object.assign(new Error("Serveur en cours de redémarrage. Reconnexion automatique…"),{transient});
+    }
+    if(!response.ok||payload.success===false)throw new Error(payload.message||`Action impossible (${response.status}).`);
+    return payload;
   }
-  if(!response.ok||payload.success===false){
-    if((response.status===401||response.status===403)&&payload.loginUrl){location.href=payload.loginUrl;throw new Error("Session expirée. Reconnexion en cours…")}
-    throw new Error(payload.message||`Action impossible (${response.status}).`);
-  }
-  return payload;
+  throw lastError||new Error("Serveur temporairement indisponible.");
 }
 function notify(message,type="success"){let n=q("#notification");if(!n){n=document.createElement("div");n.id="notification";document.querySelector(".main")?.prepend(n)}n.textContent=message;n.className=`toast ${type}`;n.classList.remove("hidden");clearTimeout(notify.timer);notify.timer=setTimeout(()=>n.classList.add("hidden"),4500)}
 function officerCell(o){const st=o.attendance_status||"offline";return `<button type="button" class="officer-identity officer-profile-link avatar-${st}" data-profile-id="${o.user_id}" title="Ouvrir le profil de ${esc(o.display_name||o.username)}"><span class="avatar-shell"><img class="officer-avatar" src="${esc(o.avatar_url)}" alt=""><i class="avatar-presence"></i></span><span class="officer-name"><strong>${esc(o.display_name||o.username)}</strong><span>${esc(o.grade||"")}</span></span></button>`}
@@ -141,7 +154,8 @@ function render(){if(!data)return;renderMyDuty();updateFilters();updateConnected
 q("#attendanceRanking").innerHTML=(data.rankings.week||[]).filter(o=>(Number(o.total_seconds)||0)>0).slice(0,10).map((o,i)=>`<div class="attendance-rank ${i<3?`attendance-podium attendance-podium-${i+1}`:""}"><span class="attendance-medal">${["🥇","🥈","🥉"][i]||`${i+1}.`}</span>${officerCell(o)}<strong class="attendance-time">${fmt(o.total_seconds)}</strong></div>`).join("")||'<div class="empty">Aucun classement.</div>';
 q("#attendanceHistory").innerHTML=(data.history||[]).filter(x=>x.ended_at).slice(0,20).map(x=>`<div class="attendance-history-row"><div>${officerCell(x)}<small>${new Date(x.started_at).toLocaleString("fr-FR")} → ${new Date(x.ended_at).toLocaleString("fr-FR")}</small></div><div><strong>${fmt(x.duration_seconds)}</strong><span>${x.end_reason&&x.end_reason.includes("forced")?"🛑 Fin forcée":"✅ Fin normale"}</span></div></div>`).join("")||'<div class="empty">Aucune session terminée.</div>';
 if(window.Chart){chart?.destroy();chart=new Chart(q("#attendanceChart"),{type:"bar",data:{labels:data.daily.map(x=>new Date(x.day).toLocaleDateString("fr-FR",{weekday:"short",day:"2-digit"})),datasets:[{label:"Heures",data:data.daily.map(x=>Math.round((x.total_seconds/3600)*100)/100)}]},options:{maintainAspectRatio:false,scales:{x:{ticks:{color:"#8fa6c2"},grid:{color:"#213654"}},y:{ticks:{color:"#8fa6c2"},grid:{color:"#213654"}}},plugins:{legend:{labels:{color:"#dce8f8"}}}}})}}
-async function load(){if(loadRunning||document.hidden)return;loadRunning=true;try{const j=await attendanceApi("/api/attendance/overview",{cache:"no-store"});processStatusNotifications(j.officers||[]);data=j;lastUpdatedAt=Date.now();render();updateLastUpdated()}catch(e){console.error(e);notify(e.message,"error")}finally{loadRunning=false}}
+function scheduleReconnect(){if(reconnectTimer)return;reconnectTimer=setTimeout(()=>{reconnectTimer=null;if(!document.hidden)load()},10000)}
+async function load(){if(loadRunning||document.hidden)return;loadRunning=true;try{const j=await attendanceApi("/api/attendance/overview",{cache:"no-store"});processStatusNotifications(j.officers||[]);data=j;lastUpdatedAt=Date.now();render();updateLastUpdated();if(reconnectTimer){clearTimeout(reconnectTimer);reconnectTimer=null}if(attendanceDisconnected){attendanceDisconnected=false;pushLiveNotification("Connexion au serveur rétablie","active")}}catch(e){console.error(e);if(e.transient){if(!attendanceDisconnected){attendanceDisconnected=true;pushLiveNotification(data?"Serveur en redémarrage — données conservées":"Connexion temporairement interrompue — nouvelle tentative automatique","warning")}scheduleReconnect()}else{notify(e.message,"error")}}finally{loadRunning=false}}
 q("#attendanceSearch")?.addEventListener("input",e=>{searchTerm=e.target.value.trim().toLowerCase();render()});q("#attendanceFilters")?.addEventListener("click",e=>{const b=e.target.closest(".attendance-filter");if(!b)return;currentFilter=b.dataset.filter;render()});
 q("#attendanceTableBody")?.addEventListener("click",e=>{const forcePause=e.target.closest(".attendance-force-pause");if(forcePause){const officer=data?.officers?.find(o=>String(o.user_id)===String(forcePause.dataset.userId));if(officer)openForcePauseModal(officer);return}const force=e.target.closest(".attendance-force");if(force){const officer=data?.officers?.find(o=>String(o.user_id)===String(force.dataset.userId));if(officer)openForceStopModal(officer);return}const remove=e.target.closest(".attendance-remove");if(!remove)return;const officer=data?.officers?.find(o=>String(o.user_id)===String(remove.dataset.userId));if(officer)openCorrectionModal(officer)});
 q("#myDutyActions")?.addEventListener("click",e=>{const b=e.target.closest(".my-duty-action");if(b)runMyDutyAction(b.dataset.action,b)});
