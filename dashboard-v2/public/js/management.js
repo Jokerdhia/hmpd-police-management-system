@@ -156,7 +156,7 @@
 
   function startManagementAutoRefresh(){
     if(managementTimer)clearInterval(managementTimer);
-    managementTimer=setInterval(()=>{if($('#managementPage')?.classList.contains('active')&&!document.hidden)load({silent:true})},30000);
+    managementTimer=setInterval(()=>{if($('#managementPage')?.classList.contains('active')&&!document.hidden)load({silent:true})},300000);
   }
 
   async function timeline(id){

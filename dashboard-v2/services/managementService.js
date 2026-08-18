@@ -23,7 +23,7 @@ function scoreOfficer(row){
 let snapshotCache=null;
 let snapshotCacheAt=0;
 let snapshotPromise=null;
-const SNAPSHOT_TTL_MS=Math.max(5000,Number(process.env.COMMAND_CENTER_CACHE_TTL_MS)||15000);
+const SNAPSHOT_TTL_MS=Math.max(30000,Number(process.env.COMMAND_CENTER_CACHE_TTL_MS)||60000);
 
 async function buildManagementSnapshot(){
   await ready;

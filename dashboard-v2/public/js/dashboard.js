@@ -16,9 +16,9 @@ async function verifyLivePermissions(){
   }finally{state.permissionsLoading=false}
 }
 async function refreshMyMessages(){if(state.messagesLoading||document.hidden)return;state.messagesLoading=true;try{const mn=await api("/api/me/notes",{cache:"no-store"});state.myNotes=mn.notes||[];state.unreadNotes=Number(mn.unread||0);updateMessageBadge();renderMyMessages()}catch(error){console.warn("Actualisation des messages impossible",error)}finally{state.messagesLoading=false}}
-setInterval(refreshMyMessages,30000);
+setInterval(refreshMyMessages,120000);
 window.addEventListener("focus",refreshMyMessages);
-setInterval(verifyLivePermissions,60000);
+setInterval(verifyLivePermissions,180000);
 window.addEventListener("focus",verifyLivePermissions);
 window.updatePromotionBadges=function(promotions=[]){const map=new Map((promotions||[]).map(p=>[String(p.user_id),p]));document.querySelectorAll('[data-promotion-status-user]').forEach(cell=>{const p=map.get(String(cell.dataset.promotionStatusUser));if(!p){cell.innerHTML='<span class="officer-promo-placeholder">—</span>';return}const meta={progress:['🟡','Progression'],eligible:['🟢','Éligible'],evaluation:['🔵','Évaluation'],frozen:['🔒','Gelée'],postponed:['🟠','Reportée'],rejected:['🔴','Refusée'],approved:['🟣','Approuvée']}[p.status]||['⚪',p.status||'Inconnu'];cell.innerHTML=`<span class="promo-status-chip">${meta[0]} ${meta[1]} · ${Number(p.progress?.percent||0)}%</span>`})};
 

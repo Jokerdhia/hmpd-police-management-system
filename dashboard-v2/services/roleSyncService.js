@@ -203,8 +203,8 @@ function startRoleSync() {
   );
 
   const interval = Number.isFinite(configuredInterval)
-    ? Math.max(configuredInterval, 60000)
-    : 60000;
+    ? Math.max(configuredInterval, 300000)
+    : 300000;
 
   syncPoliceRoles();
 
