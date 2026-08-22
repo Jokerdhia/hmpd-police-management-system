@@ -33,7 +33,7 @@ async function buildManagementSnapshot(){
         SELECT user_id,
           COALESCE(SUM(CASE WHEN started_at>=(date_trunc('week',CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels') AT TIME ZONE 'Europe/Brussels') THEN COALESCE(duration_seconds, GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (COALESCE(paused_at,CURRENT_TIMESTAMP)-started_at)))::int-COALESCE(paused_seconds,0))) ELSE 0 END),0)::bigint week_seconds,
           COUNT(*) FILTER (WHERE started_at>=(date_trunc('week',CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels') AT TIME ZONE 'Europe/Brussels'))::int week_sessions,
-          COUNT(DISTINCT date_trunc('day',started_at)) FILTER (WHERE started_at>=CURRENT_TIMESTAMP-interval '30 days')::int active_days_30,
+          COUNT(DISTINCT date_trunc('day',started_at AT TIME ZONE 'Europe/Brussels')) FILTER (WHERE started_at>=CURRENT_TIMESTAMP-interval '30 days')::int active_days_30,
           MAX(started_at) last_service
         FROM attendance_sessions GROUP BY user_id
       ), s AS (

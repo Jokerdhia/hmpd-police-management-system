@@ -3,8 +3,8 @@ const root=path.resolve(__dirname,'..'); const failures=[];
 function read(rel){return fs.readFileSync(path.join(root,rel),'utf8')}
 function assert(cond,msg){if(!cond)failures.push(msg)}
 const pkg=require(path.join(root,'package.json'));
-assert(pkg.version==='7.2.3',`package version=${pkg.version}`);
-assert(read('dashboard-v2/server.js').includes('version: "7.2.3"'),'health version non synchronisée');
+assert(pkg.version==='7.3.1',`package version=${pkg.version}`);
+assert(read('dashboard-v2/server.js').includes('version: "7.3.1"'),'health version non synchronisée');
 
 const grades=require(path.join(root,'dashboard-v2/config/grades.js'));
 assert(grades.GRADES.length===12,'la hiérarchie doit contenir 12 grades');
@@ -46,7 +46,12 @@ assert(sync.includes('getPointsAfterGradeSync'),'sync périodique ne protège pa
 const bot=read('index.js');
 assert(bot.includes('getPointsAfterGradeSync'),'sync événement Discord ne protège pas les points cumulés');
 const attendance=read('dashboard-v2/dashboardDatabase.js');
-assert(attendance.includes('LEAST(s.effective_end,b.ends_at)'),'présence période non découpée aux limites');
+assert(attendance.includes("started_at AT TIME ZONE 'Europe/Brussels'"),'présence sans journée de service locale Bruxelles');
+assert(attendance.includes('tout le temps') || attendance.includes('date de début'),'règle session traversant minuit absente');
+const db=read('database.js');
+assert(db.includes('attendance.start')&&db.includes('attendance.stop'),'audit des prises/fins de service absent');
+assert(db.includes("started_at AT TIME ZONE 'Europe/Brussels'"),'classement bot sans timezone Bruxelles');
+assert(sync.includes('stale.paused_at')&&sync.includes('attendance.auto_close'),'fermeture automatique des longues sessions non sécurisée/auditée');
 const auth=read('dashboard-v2/auth/auth.js');
 assert(auth.includes('Auto-modification interdite'),'protection auto-modification absente');
 assert(auth.includes('targetIsHigher'),'protection hiérarchique absente');

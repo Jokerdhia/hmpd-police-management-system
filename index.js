@@ -674,11 +674,69 @@ async function modifyPoints({
 |--------------------------------------------------------------------------
 */
 
+const ENABLE_GUILD_MEMBERS_INTENT = /^(1|true|yes|on)$/i.test(
+  String(process.env.ENABLE_GUILD_MEMBERS_INTENT || "").trim()
+);
+
+const gatewayIntents = [GatewayIntentBits.Guilds];
+if (ENABLE_GUILD_MEMBERS_INTENT) {
+  gatewayIntents.push(GatewayIntentBits.GuildMembers);
+}
+
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-  ],
+  intents: gatewayIntents,
+  // Évite qu'une requête Discord supprimée entre le fetch et l'action fasse
+  // remonter inutilement une exception globale dans discord.js.
+  failIfNotExists: false,
+});
+
+let gatewayDisconnectCount = 0;
+let gatewayReconnectCount = 0;
+let lastGatewayDisconnectAt = null;
+
+client.on("shardDisconnect", (event, shardId) => {
+  gatewayDisconnectCount += 1;
+  lastGatewayDisconnectAt = new Date();
+  const code = event?.code ?? "?";
+  const reason = String(event?.reason || "aucune raison fournie").trim();
+  console.warn(
+    `⚠️ Discord Gateway déconnecté | shard=${shardId} | code=${code} | raison=${reason} | total=${gatewayDisconnectCount}`
+  );
+
+  if (Number(code) === 4014) {
+    console.error(
+      "❌ Discord refuse un intent privilégié (4014). Désactive ENABLE_GUILD_MEMBERS_INTENT ou active Server Members Intent dans le Developer Portal."
+    );
+  }
+});
+
+client.on("shardReconnecting", (shardId) => {
+  gatewayReconnectCount += 1;
+  console.warn(
+    `🔄 Reconnexion Discord Gateway | shard=${shardId} | tentative=${gatewayReconnectCount}`
+  );
+});
+
+client.on("shardResume", (shardId, replayedEvents) => {
+  const outageSeconds = lastGatewayDisconnectAt
+    ? Math.max(0, Math.round((Date.now() - lastGatewayDisconnectAt.getTime()) / 1000))
+    : 0;
+  console.log(
+    `✅ Session Discord reprise | shard=${shardId} | événements rejoués=${replayedEvents} | coupure≈${outageSeconds}s`
+  );
+});
+
+client.on("shardReady", (shardId, unavailableGuilds) => {
+  const unavailable = Array.isArray(unavailableGuilds) ? unavailableGuilds.length : 0;
+  console.log(`🟢 Discord Gateway prêt | shard=${shardId} | guilds indisponibles=${unavailable}`);
+});
+
+client.on("error", (error) => {
+  console.error("❌ Erreur client Discord :", error?.message || error);
+});
+
+client.on("warn", (message) => {
+  console.warn("⚠️ Avertissement Discord :", message);
 });
 
 function memberHasPoliceRole(member) {
@@ -818,6 +876,14 @@ client.on(Events.GuildMemberRemove, async (member) => {
 
 client.once(Events.ClientReady, async () => {
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log(
+    `🔐 Gateway intents : Guilds${ENABLE_GUILD_MEMBERS_INTENT ? " + GuildMembers" : " uniquement (mode stable)"}`
+  );
+  if (!ENABLE_GUILD_MEMBERS_INTENT) {
+    console.log(
+      "ℹ️ Server Members Intent n'est pas requis pour la présence. La synchronisation instantanée des changements de rôle Discord est désactivée; le dashboard continue d'utiliser l'API REST Discord."
+    );
+  }
   console.log(`✅ Connecté en tant que ${client.user.tag}`);
   console.log("✅ Base Neon PostgreSQL connectée.");
   console.log("✅ Promotions automatiques désactivées — validation High Command active.");

@@ -96,6 +96,18 @@ const ready = (async () => {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
 
+    CREATE TABLE IF NOT EXISTS admin_audit_log (
+      id BIGSERIAL PRIMARY KEY,
+      actor_id TEXT NOT NULL,
+      action TEXT NOT NULL,
+      target_id TEXT,
+      details JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_created ON admin_audit_log(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_target ON admin_audit_log(target_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_audit_action ON admin_audit_log(action, created_at DESC);
+
     ALTER TABLE attendance_sessions
       ADD COLUMN IF NOT EXISTS paused_at TIMESTAMPTZ;
 
@@ -256,6 +268,20 @@ async function countOfficers() {
   const { rows } = await pool.query("SELECT COUNT(*)::int AS total FROM officers");
   return Number(rows[0]?.total || 0);
 }
+async function auditAttendance(action, userId, actorId, details = {}) {
+  await ready;
+  try {
+    await pool.query(
+      `INSERT INTO admin_audit_log(actor_id,action,target_id,details)
+       VALUES($1,$2,$3,$4::jsonb)`,
+      [String(actorId||"SYSTEM"),String(action),String(userId),JSON.stringify(details||{})]
+    );
+  } catch (error) {
+    // L'audit ne doit jamais bloquer une prise/fin de service.
+    console.warn("⚠️ Audit présence non enregistré :", error?.message || error);
+  }
+}
+
 async function startAttendance(userId, startedBy = userId) {
   await ready;
   const safeUserId = normalizeUserId(userId);
@@ -283,6 +309,7 @@ async function startAttendance(userId, startedBy = userId) {
       [safeUserId, safeStartedBy]
     );
 
+    await auditAttendance("attendance.start", safeUserId, safeStartedBy, { sessionId: rows[0].id, startedAt: rows[0].started_at });
     return { started: true, session: rows[0] };
   } catch (error) {
     if (error?.code === "23505") {
@@ -326,6 +353,7 @@ async function pauseAttendance(userId) {
   );
 
   if (rows[0]) {
+    await auditAttendance("attendance.pause", safeUserId, safeUserId, { sessionId: rows[0].id, pausedAt: rows[0].paused_at, pauseCount: rows[0].pause_count });
     return { paused: true, session: rows[0] };
   }
 
@@ -371,6 +399,7 @@ async function resumeAttendance(userId) {
   );
 
   if (rows[0]) {
+    await auditAttendance("attendance.resume", safeUserId, safeUserId, { sessionId: rows[0].id, pausedSeconds: rows[0].paused_seconds });
     return { resumed: true, session: rows[0] };
   }
 
@@ -447,9 +476,17 @@ async function stopAttendance(
     [safeUserId, safeEndedBy, safeReason]
   );
 
-  return rows[0]
-    ? { stopped: true, session: rows[0] }
-    : { stopped: false, reason: "not_active" };
+  if (rows[0]) {
+    await auditAttendance("attendance.stop", safeUserId, safeEndedBy, {
+      sessionId: rows[0].id,
+      endReason: safeReason,
+      durationSeconds: Number(rows[0].duration_seconds||0),
+      pausedSeconds: Number(rows[0].paused_seconds||0),
+      pauseCount: Number(rows[0].pause_count||0)
+    });
+    return { stopped: true, session: rows[0] };
+  }
+  return { stopped: false, reason: "not_active" };
 }
 
 async function getActiveAttendance(userId) {
@@ -527,7 +564,8 @@ async function getAttendanceTotals(period = "week", limit = 25) {
          END
        )::bigint AS total_seconds
      FROM attendance_sessions
-     WHERE started_at >= date_trunc($1, CURRENT_TIMESTAMP)
+     WHERE (started_at AT TIME ZONE 'Europe/Brussels') >=
+           date_trunc($1, CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels')
      GROUP BY user_id
      ORDER BY total_seconds DESC
      LIMIT $2`,

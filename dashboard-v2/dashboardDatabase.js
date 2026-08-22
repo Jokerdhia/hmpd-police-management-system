@@ -66,30 +66,25 @@ async function getAttendanceTotalsDashboard(period='week',limit=100){
   await ready;
   const allowed={day:'day',week:'week',month:'month'};
   const unit=allowed[period]||'week';
+  // Règle HMPD : une session appartient à la journée locale où elle a commencé.
+  // Ainsi 22:00 -> 01:00 reste une seule présence de 3 h sur le jour de départ.
   const rows=(await pool.query(`
     WITH bounds AS (
-      SELECT (date_trunc($1, CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels') AT TIME ZONE 'Europe/Brussels') AS starts_at,
-             CURRENT_TIMESTAMP AS ends_at
+      SELECT
+        date_trunc($1, CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels') AS local_start,
+        CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels' AS local_end
     ), sessions AS (
-      SELECT s.*,
-        CASE WHEN s.ended_at IS NULL THEN COALESCE(s.paused_at,CURRENT_TIMESTAMP) ELSE s.ended_at END AS effective_end,
+      SELECT s.user_id,s.started_at,
         GREATEST(0,CASE WHEN s.ended_at IS NULL THEN
           FLOOR(EXTRACT(EPOCH FROM (COALESCE(s.paused_at,CURRENT_TIMESTAMP)-s.started_at)))::bigint-COALESCE(s.paused_seconds,0)
-          ELSE COALESCE(s.duration_seconds,0)::bigint END) AS active_seconds,
-        GREATEST(1,FLOOR(EXTRACT(EPOCH FROM ((CASE WHEN s.ended_at IS NULL THEN COALESCE(s.paused_at,CURRENT_TIMESTAMP) ELSE s.ended_at END)-s.started_at)))::bigint) AS wall_seconds
-      FROM attendance_sessions s,bounds b
-      WHERE (CASE WHEN s.ended_at IS NULL THEN COALESCE(s.paused_at,CURRENT_TIMESTAMP) ELSE s.ended_at END)>b.starts_at
-        AND s.started_at<b.ends_at
+          ELSE COALESCE(s.duration_seconds,0)::bigint END) AS active_seconds
+      FROM attendance_sessions s CROSS JOIN bounds b
+      WHERE (s.started_at AT TIME ZONE 'Europe/Brussels') >= b.local_start
+        AND (s.started_at AT TIME ZONE 'Europe/Brussels') <= b.local_end
     )
-    SELECT s.user_id,
-      ROUND(SUM(
-        GREATEST(0,EXTRACT(EPOCH FROM (LEAST(s.effective_end,b.ends_at)-GREATEST(s.started_at,b.starts_at))))
-        * LEAST(1.0,s.active_seconds::numeric/s.wall_seconds::numeric)
-      ))::bigint AS total_seconds,
-      COUNT(*)::int AS sessions
-    FROM sessions s CROSS JOIN bounds b
-    WHERE LEAST(s.effective_end,b.ends_at)>GREATEST(s.started_at,b.starts_at)
-    GROUP BY s.user_id
+    SELECT user_id,COALESCE(SUM(active_seconds),0)::bigint AS total_seconds,COUNT(*)::int AS sessions
+    FROM sessions
+    GROUP BY user_id
     ORDER BY total_seconds DESC
     LIMIT $2`,[unit,lim(limit,100,500)])).rows;
   return rows.map(r=>({...r,total_seconds:Number(r.total_seconds||0),sessions:Number(r.sessions||0)}));
@@ -97,33 +92,26 @@ async function getAttendanceTotalsDashboard(period='week',limit=100){
 async function getAttendanceDaily(days=7){
   await ready;
   const safe=Math.min(Math.max(parseInt(days,10)||7,1),31);
+  // Même règle que les classements : tout le temps d'une session est rattaché
+  // à sa date de début en Europe/Brussels, même si elle traverse minuit.
   const rows=(await pool.query(`
     WITH dates AS (
-      SELECT local_day,
-        (local_day AT TIME ZONE 'Europe/Brussels') AS starts_at,
-        ((local_day+interval '1 day') AT TIME ZONE 'Europe/Brussels') AS ends_at
-      FROM generate_series(
+      SELECT generate_series(
         date_trunc('day',CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels')-($1::int-1)*interval '1 day',
-        date_trunc('day',CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels'),interval '1 day'
-      ) local_day
+        date_trunc('day',CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels'),
+        interval '1 day'
+      ) AS local_day
     ), sessions AS (
-      SELECT s.*,
-        CASE WHEN s.ended_at IS NULL THEN COALESCE(s.paused_at,CURRENT_TIMESTAMP) ELSE s.ended_at END AS effective_end,
-        GREATEST(0,CASE WHEN s.ended_at IS NULL THEN
-          FLOOR(EXTRACT(EPOCH FROM (COALESCE(s.paused_at,CURRENT_TIMESTAMP)-s.started_at)))::bigint-COALESCE(s.paused_seconds,0)
-          ELSE COALESCE(s.duration_seconds,0)::bigint END) AS active_seconds,
-        GREATEST(1,FLOOR(EXTRACT(EPOCH FROM ((CASE WHEN s.ended_at IS NULL THEN COALESCE(s.paused_at,CURRENT_TIMESTAMP) ELSE s.ended_at END)-s.started_at)))::bigint) AS wall_seconds
-      FROM attendance_sessions s
+      SELECT date_trunc('day',started_at AT TIME ZONE 'Europe/Brussels') AS local_day,
+        GREATEST(0,CASE WHEN ended_at IS NULL THEN
+          FLOOR(EXTRACT(EPOCH FROM (COALESCE(paused_at,CURRENT_TIMESTAMP)-started_at)))::bigint-COALESCE(paused_seconds,0)
+          ELSE COALESCE(duration_seconds,0)::bigint END) AS active_seconds
+      FROM attendance_sessions
+      WHERE (started_at AT TIME ZONE 'Europe/Brussels') >=
+        date_trunc('day',CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels')-($1::int-1)*interval '1 day'
     )
-    SELECT d.local_day AS day,
-      COALESCE(ROUND(SUM(
-        CASE WHEN s.id IS NULL THEN 0 ELSE
-          GREATEST(0,EXTRACT(EPOCH FROM (LEAST(s.effective_end,d.ends_at)-GREATEST(s.started_at,d.starts_at))))
-          * LEAST(1.0,s.active_seconds::numeric/s.wall_seconds::numeric)
-        END
-      )),0)::bigint AS total_seconds
-    FROM dates d
-    LEFT JOIN sessions s ON s.effective_end>d.starts_at AND s.started_at<d.ends_at
+    SELECT d.local_day AS day,COALESCE(SUM(s.active_seconds),0)::bigint AS total_seconds
+    FROM dates d LEFT JOIN sessions s ON s.local_day=d.local_day
     GROUP BY d.local_day ORDER BY d.local_day`,[safe])).rows;
   return rows.map(r=>({day:r.day,total_seconds:Number(r.total_seconds||0)}));
 }

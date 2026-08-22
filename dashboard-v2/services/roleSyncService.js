@@ -47,7 +47,42 @@ async function cleanupOperationalData(){
   const parsedAuditDays=Number(process.env.AUDIT_RETENTION_DAYS);
   const maxHours=Math.max(6,Number.isFinite(parsedMaxHours)?parsedMaxHours:18);
   const auditDays=Math.max(30,Number.isFinite(parsedAuditDays)?parsedAuditDays:180);
-  const closed=await pool.query(`UPDATE attendance_sessions SET ended_at=CURRENT_TIMESTAMP,duration_seconds=GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP-started_at)))::int-COALESCE(paused_seconds,0)),ended_by='SYSTEM',end_reason='Session fermée automatiquement après délai de sécurité' WHERE ended_at IS NULL AND started_at < CURRENT_TIMESTAMP-($1::text||' hours')::interval RETURNING id`,[String(maxHours)]).catch(()=>({rowCount:0}));
+
+  // Ferme les sessions abandonnées sans transformer une pause ouverte en temps travaillé.
+  // Si la session était en pause, toute la période paused_at -> fermeture est ajoutée aux pauses.
+  const closed=await pool.query(`
+    WITH stale AS (
+      SELECT id,user_id,started_at,paused_at,COALESCE(paused_seconds,0) AS old_paused_seconds
+      FROM attendance_sessions
+      WHERE ended_at IS NULL
+        AND started_at < CURRENT_TIMESTAMP-($1::text||' hours')::interval
+      FOR UPDATE
+    ), updated AS (
+      UPDATE attendance_sessions s
+      SET ended_at=CURRENT_TIMESTAMP,
+          paused_seconds=stale.old_paused_seconds + CASE WHEN stale.paused_at IS NOT NULL
+            THEN GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP-stale.paused_at)))::int)
+            ELSE 0 END,
+          duration_seconds=GREATEST(0,
+            FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP-stale.started_at)))::int
+            - stale.old_paused_seconds
+            - CASE WHEN stale.paused_at IS NOT NULL
+              THEN GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (CURRENT_TIMESTAMP-stale.paused_at)))::int)
+              ELSE 0 END),
+          paused_at=NULL,
+          ended_by='SYSTEM',
+          end_reason='Session fermée automatiquement après délai de sécurité'
+      FROM stale WHERE s.id=stale.id
+      RETURNING s.id,s.user_id,s.duration_seconds,s.paused_seconds,s.pause_count
+    )
+    SELECT * FROM updated`,[String(maxHours)]).catch((error)=>{console.error('❌ Maintenance présence:',error?.message||error);return {rows:[],rowCount:0}});
+
+  for(const row of closed.rows||[]){
+    await pool.query(`INSERT INTO admin_audit_log(actor_id,action,target_id,details) VALUES('SYSTEM','attendance.auto_close',$1,$2::jsonb)`,[
+      String(row.user_id),JSON.stringify({sessionId:row.id,durationSeconds:Number(row.duration_seconds||0),pausedSeconds:Number(row.paused_seconds||0),pauseCount:Number(row.pause_count||0),maxOpenHours:maxHours})
+    ]).catch(()=>{});
+  }
+
   const audit=await pool.query(`DELETE FROM admin_audit_log WHERE created_at < CURRENT_TIMESTAMP-($1::text||' days')::interval`,[String(auditDays)]).catch(()=>({rowCount:0}));
   if((closed.rowCount||0)>0||(audit.rowCount||0)>0)console.log(`🧹 Maintenance DB : ${closed.rowCount||0} session(s) abandonnée(s) fermée(s), ${audit.rowCount||0} audit(s) ancien(s) supprimé(s).`);
 }
