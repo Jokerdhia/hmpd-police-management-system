@@ -178,6 +178,79 @@ async function listAudit(limit=100,category='all'){
   return category&&category!=='all'?result.filter(r=>r.category===category):result;
 }
 
-async function getWeeklyReport(){const snap=await getManagementSnapshot();const top=[...snap.officers].sort((a,b)=>b.week_seconds-a.week_seconds).slice(0,5);return {generatedAt:new Date().toISOString(),summary:snap.summary,trends:snap.trends,topAttendance:top.map(o=>({user_id:o.user_id,display_name:o.display_name,week_seconds:o.week_seconds,score:o.score.total})),inactive:snap.officers.filter(o=>o.inactive_days>=7).slice(0,20).map(o=>({user_id:o.user_id,display_name:o.display_name,inactive_days:o.inactive_days})),promotions:snap.officers.filter(o=>o.promotion_eligible).map(o=>({user_id:o.user_id,display_name:o.display_name,next_grade:o.next_grade,score:o.score.total}))}}
+async function getWeeklyReport(){
+  const snap=await getManagementSnapshot();
+
+  // Le rapport est envoyé le lundi matin. Le champ `week_seconds` du snapshot
+  // repart à zéro le lundi à 00:00, ce qui affichait seulement quelques heures
+  // du nouveau lundi au lieu de la semaine complète écoulée.
+  // Ici on calcule explicitement la semaine précédente complète :
+  // lundi 00:00 -> lundi 00:00, heure Europe/Brussels.
+  const {rows:weeklyRows}=await pool.query(`
+    WITH bounds AS (
+      SELECT
+        ((date_trunc('week', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels') - interval '7 days') AT TIME ZONE 'Europe/Brussels') AS starts_at,
+        (date_trunc('week', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels') AT TIME ZONE 'Europe/Brussels') AS ends_at
+    ), overlapping AS (
+      SELECT
+        s.*,
+        GREATEST(s.started_at, b.starts_at) AS overlap_start,
+        LEAST(COALESCE(s.ended_at, CURRENT_TIMESTAMP), b.ends_at) AS overlap_end
+      FROM attendance_sessions s
+      CROSS JOIN bounds b
+      WHERE s.started_at < b.ends_at
+        AND COALESCE(s.ended_at, CURRENT_TIMESTAMP) > b.starts_at
+    )
+    SELECT user_id,
+      COALESCE(SUM(
+        CASE
+          -- Cas normal : la session est entièrement dans la semaine. On garde
+          -- la durée validée (qui exclut déjà les pauses).
+          WHEN started_at >= overlap_start
+           AND COALESCE(ended_at, CURRENT_TIMESTAMP) <= overlap_end
+          THEN GREATEST(0,
+            CASE
+              WHEN ended_at IS NULL THEN
+                FLOOR(EXTRACT(EPOCH FROM (COALESCE(paused_at, CURRENT_TIMESTAMP) - started_at)))::bigint - COALESCE(paused_seconds,0)
+              ELSE COALESCE(duration_seconds,0)::bigint
+            END
+          )
+          -- Session qui traverse une frontière de semaine : on ne peut jamais
+          -- compter plus que la portion réellement comprise dans la fenêtre.
+          ELSE GREATEST(0, LEAST(
+            COALESCE(duration_seconds,
+              FLOOR(EXTRACT(EPOCH FROM (COALESCE(paused_at, CURRENT_TIMESTAMP) - started_at)))::bigint - COALESCE(paused_seconds,0)
+            )::bigint,
+            FLOOR(EXTRACT(EPOCH FROM (overlap_end - overlap_start)))::bigint
+          ))
+        END
+      ),0)::bigint AS week_seconds,
+      COUNT(*)::int AS week_sessions
+    FROM overlapping
+    WHERE overlap_end > overlap_start
+    GROUP BY user_id
+  `);
+
+  const weeklyMap=new Map((weeklyRows||[]).map(r=>[String(r.user_id),Number(r.week_seconds||0)]));
+  const top=[...snap.officers]
+    .map(o=>({...o,report_week_seconds:weeklyMap.get(String(o.user_id))||0}))
+    .filter(o=>o.report_week_seconds>0)
+    .sort((a,b)=>b.report_week_seconds-a.report_week_seconds)
+    .slice(0,5);
+
+  return {
+    generatedAt:new Date().toISOString(),
+    summary:snap.summary,
+    trends:snap.trends,
+    topAttendance:top.map(o=>({
+      user_id:o.user_id,
+      display_name:o.display_name,
+      week_seconds:o.report_week_seconds,
+      score:o.score.total
+    })),
+    inactive:snap.officers.filter(o=>o.inactive_days>=7).slice(0,20).map(o=>({user_id:o.user_id,display_name:o.display_name,inactive_days:o.inactive_days})),
+    promotions:snap.officers.filter(o=>o.promotion_eligible).map(o=>({user_id:o.user_id,display_name:o.display_name,next_grade:o.next_grade,score:o.score.total}))
+  };
+}
 
 module.exports={getManagementSnapshot,getWeeklyPerformanceWinner,getOfficerTimeline,audit,listAudit,getWeeklyReport};

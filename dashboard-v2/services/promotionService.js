@@ -223,8 +223,8 @@ async function getPromotionProfile(userId, actorId='SYSTEM'){
   const history=(await pool.query(`SELECT * FROM grade_history WHERE user_id=$1 ORDER BY id DESC LIMIT 20`,[userId])).rows;
   const sanctions=(await pool.query(`SELECT id,sanction_type,reason,author_id,expires_at,status,created_at FROM officer_sanctions WHERE user_id=$1 ORDER BY id DESC LIMIT 50`,[userId])).rows;
   const serviceStats=(await pool.query(`SELECT
-    COALESCE(SUM(CASE WHEN started_at>=date_trunc('week',CURRENT_TIMESTAMP) THEN COALESCE(duration_seconds,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (COALESCE(paused_at,CURRENT_TIMESTAMP)-started_at)))::int-COALESCE(paused_seconds,0))) ELSE 0 END),0)::bigint week_seconds,
-    COALESCE(SUM(CASE WHEN started_at>=date_trunc('month',CURRENT_TIMESTAMP) THEN COALESCE(duration_seconds,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (COALESCE(paused_at,CURRENT_TIMESTAMP)-started_at)))::int-COALESCE(paused_seconds,0))) ELSE 0 END),0)::bigint month_seconds
+    COALESCE(SUM(CASE WHEN started_at >= (date_trunc('week', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels') AT TIME ZONE 'Europe/Brussels') THEN COALESCE(duration_seconds,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (COALESCE(paused_at,CURRENT_TIMESTAMP)-started_at)))::int-COALESCE(paused_seconds,0))) ELSE 0 END),0)::bigint week_seconds,
+    COALESCE(SUM(CASE WHEN started_at >= (date_trunc('month', CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Brussels') AT TIME ZONE 'Europe/Brussels') THEN COALESCE(duration_seconds,GREATEST(0,FLOOR(EXTRACT(EPOCH FROM (COALESCE(paused_at,CURRENT_TIMESTAMP)-started_at)))::int-COALESCE(paused_seconds,0))) ELSE 0 END),0)::bigint month_seconds
     FROM attendance_sessions WHERE user_id=$1`,[userId])).rows[0]||{};
   const evaluations=(await pool.query(`SELECT * FROM rp_evaluations WHERE user_id=$1 ORDER BY id DESC LIMIT 12`,[userId])).rows.map(x=>({...x,score:rpScore(x)}));
   const currentWeekEvaluation=evaluations.find(x=>new Date(x.created_at).getTime()>=Date.now()-7*86400000)||null;
